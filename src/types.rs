@@ -8,7 +8,7 @@ pub struct Symbol {
 }
 
 impl Symbol {
-    fn new(name: &str) -> Self {
+    pub fn new(name: &str) -> Self {
         let name = name.to_owned();
         Self { name }
     }
@@ -30,9 +30,9 @@ pub struct Pos {
     pub col: usize,
 }
 
-struct Positioned<T> {
-    pos: Pos,
-    t: T,
+pub struct Positioned<T> {
+    pub pos: Pos,
+    pub t: T,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,21 +52,21 @@ impl Loc {
     }
 }
 
-struct Located<T> {
-    loc: Loc,
-    t: T,
+pub struct Located<T> {
+    pub loc: Loc,
+    pub t: T,
 }
 
-struct LocatedExpr<T> {
-    loc: T,
-    expr: Box<ExprAt<T>>,
+pub struct LocatedExpr<T> {
+    pub loc: T,
+    pub expr: Box<ExprAt<T>>,
 }
 
-type Expr = LocatedExpr<Loc>;
+pub type Expr = LocatedExpr<Loc>;
 
 type OutExpr = LocatedExpr<()>;
 
-enum ExprAt<T> {
+pub enum ExprAt<T> {
     The(LocatedExpr<T>, LocatedExpr<T>),
     Var(Symbol),
     Atom,
@@ -252,7 +252,8 @@ enum TopLevel<T> {
     Example(T),
 }
 
-enum Value {
+#[derive(Clone)]
+pub enum Value {
     Atom,
     Tick(Symbol),
     Sigma(Symbol, Box<Value>, Closure<Value>),
@@ -280,7 +281,8 @@ enum Value {
     Neu(Box<Value>, Box<Neutral>),
 }
 
-enum Neutral {
+#[derive(Clone)]
+pub enum Neutral {
     Var(Symbol),
     Car(Box<Neutral>),
     Cdr(Box<Neutral>),
@@ -307,17 +309,18 @@ enum Neutral {
     Todo(Loc, Value),
 }
 
-struct Normal {
-    typ: Value,
-    val: Value,
+#[derive(Clone)]
+pub enum Normal {
+    The(Value, Value),
 }
 
-struct Closure<T> {
-    env: Env<T>,
-    core: Core,
+#[derive(Clone)]
+pub struct Closure<T> {
+    pub env: Env<T>,
+    pub expr: Core,
 }
 
-type Env<T> = HashMap<Symbol, T>;
+pub type Env<T> = Vec<(Symbol, T)>;
 
 enum MessagePart<T> {
     Text(String),
