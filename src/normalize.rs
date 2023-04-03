@@ -23,8 +23,7 @@ impl Norm {
     }
 
     fn fresh(&self, x: &str) -> Symbol {
-        let x = Symbol::new(x);
-        freshen(&self.bound, x)
+        freshen(&self.bound, x.into())
     }
 
     fn instantiate(&self, clos: Closure<Value>, x: Symbol, v: Value) -> Result<Value> {

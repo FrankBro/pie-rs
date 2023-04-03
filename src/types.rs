@@ -7,10 +7,15 @@ pub struct Symbol {
     pub name: String,
 }
 
-impl Symbol {
-    pub fn new(name: &str) -> Self {
-        let name = name.to_owned();
-        Self { name }
+impl From<String> for Symbol {
+    fn from(name: String) -> Self {
+        Symbol { name }
+    }
+}
+
+impl From<&str> for Symbol {
+    fn from(value: &str) -> Self {
+        Symbol::from(value.to_owned())
     }
 }
 
@@ -43,7 +48,7 @@ pub struct Loc {
 }
 
 impl Loc {
-    fn span(p1: Self, p2: Self) -> Self {
+    pub fn span(p1: Self, p2: Self) -> Self {
         Self {
             source: p1.source.clone(),
             start: p1.start,
@@ -57,6 +62,7 @@ pub struct Located<T> {
     pub t: T,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct LocatedExpr<T> {
     pub loc: T,
     pub expr: Box<ExprAt<T>>,
@@ -66,6 +72,7 @@ pub type Expr = LocatedExpr<Loc>;
 
 type OutExpr = LocatedExpr<()>;
 
+#[derive(Debug, PartialEq)]
 pub enum ExprAt<T> {
     The(LocatedExpr<T>, LocatedExpr<T>),
     Var(Symbol),
