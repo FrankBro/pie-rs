@@ -1,4 +1,5 @@
 mod alpha_equiv;
+mod elab;
 mod fresh;
 mod normalize;
 mod parse;

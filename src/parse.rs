@@ -419,7 +419,7 @@ mod tests {
             loc: loc(1, 2),
             expr: Box::new(ExprAt::Var("x".into())),
         };
-        let actual = parse_expr("<test input>", input).unwrap();
+        let actual = parse_expr(SOURCE, input).unwrap();
         assert_eq!(expected, actual);
     }
 
@@ -430,7 +430,7 @@ mod tests {
             loc: loc(1, 5),
             expr: Box::new(ExprAt::Zero),
         };
-        let actual = parse_expr("<test input>", input).unwrap();
+        let actual = parse_expr(SOURCE, input).unwrap();
         assert_eq!(expected, actual);
     }
 
@@ -450,7 +450,7 @@ mod tests {
                 }],
             )),
         };
-        let actual = parse_expr("<test input>", input).unwrap();
+        let actual = parse_expr(SOURCE, input).unwrap();
         assert_eq!(expected, actual);
     }
 
@@ -470,7 +470,7 @@ mod tests {
                 },
             )),
         };
-        let actual = parse_expr("<test input>", input).unwrap();
+        let actual = parse_expr(SOURCE, input).unwrap();
         assert_eq!(expected, actual);
     }
 }

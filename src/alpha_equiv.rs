@@ -244,7 +244,7 @@ mod tests {
         }
         fn tick(name: &str) -> Core {
             Core::Tick(sym(name))
-        };
+        }
         let nat = || Core::Nat;
         fn sigma(name: &str, e1: Core, e2: Core) -> Core {
             Core::Sigma(sym(name), Box::new(e1), Box::new(e2))

@@ -57,6 +57,7 @@ impl Loc {
     }
 }
 
+#[derive(Debug)]
 pub struct Located<T> {
     pub loc: Loc,
     pub t: T,
@@ -259,7 +260,7 @@ enum TopLevel<T> {
     Example(T),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Atom,
     Tick(Symbol),
@@ -288,7 +289,7 @@ pub enum Value {
     Neu(Box<Value>, Box<Neutral>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Neutral {
     Var(Symbol),
     Car(Box<Neutral>),
@@ -316,12 +317,12 @@ pub enum Neutral {
     Todo(Loc, Value),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Normal {
     The(Value, Value),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Closure<T> {
     pub env: Env<T>,
     pub expr: Core,
@@ -329,12 +330,13 @@ pub struct Closure<T> {
 
 pub type Env<T> = Vec<(Symbol, T)>;
 
-enum MessagePart<T> {
+#[derive(Debug)]
+pub enum MessagePart<T> {
     Text(String),
     Val(T),
 }
 
-enum ElabInfo {
+pub enum ElabInfo {
     ExprHasType(Core),
     ExprIsType,
     ExprWillHaveType(Core),
@@ -344,4 +346,5 @@ enum ElabInfo {
     FoundTodo(Vec<(Symbol, Option<Loc>, Core)>, Core),
 }
 
-struct ElabErr(Located<Vec<MessagePart<Core>>>);
+#[derive(Debug)]
+pub struct ElabErr(Located<Vec<MessagePart<Core>>>);
