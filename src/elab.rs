@@ -3,8 +3,8 @@ use crate::{
     fresh::freshen,
     normalize::{self, Norm},
     types::{
-        Core, ElabErr, ElabInfo, Env, Expr, ExprAt, Loc, Located, MessagePart, Neutral, Normal,
-        Symbol, Value,
+        Closure, Core, ElabErr, ElabInfo, Env, Expr, ExprAt, Loc, Located, LocatedExpr,
+        MessagePart, Neutral, Normal, Symbol, TypedArg, Value,
     },
 };
 
@@ -15,10 +15,14 @@ pub enum Error {
     UnknownVariable(Symbol, Vec<Symbol>),
     NotSame(Core, Core, Option<(Core, Core)>),
     NotSameType(Core, Core, Option<(Core, Core)>),
+    CheckLambdaExpectedPi(Value),
+    CheckSameExpectedEq(Value),
+    CheckConsExpectedSigma(Value),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
+#[derive(Clone)]
 enum ContextEntry<T> {
     HasType(Option<Loc>, T),
     Claimed(Loc, T),
@@ -39,6 +43,7 @@ impl<T> ContextEntry<T> {
     }
 }
 
+#[derive(Clone)]
 struct Context<T>(Vec<(Symbol, ContextEntry<T>)>);
 
 impl<T> Context<T> {
@@ -63,6 +68,7 @@ impl Context<Value> {
     }
 }
 
+#[derive(Clone)]
 pub struct Elab {
     context: Context<Value>,
     loc: Loc,
@@ -91,6 +97,10 @@ impl Elab {
         freshen(&used, x)
     }
 
+    fn with_context(&mut self, x: Symbol, loc: Option<Loc>, t: Value) {
+        self.context.0.push((x, ContextEntry::HasType(loc, t)))
+    }
+
     fn apply_renaming(&mut self, x: &Symbol) -> Result<Symbol> {
         match self.ren.iter().find(|(ren, _)| x == ren) {
             None => Err(Error::UnknownVariable(
@@ -99,6 +109,10 @@ impl Elab {
             )),
             Some((_, y)) => Ok(y.clone()),
         }
+    }
+
+    fn rename(&mut self, from: Symbol, to: Symbol) {
+        self.ren.push((from, to));
     }
 
     fn run_norm(&mut self) -> Norm {
@@ -112,6 +126,11 @@ impl Elab {
         norm.eval(expr).map_err(Error::Normalize)
     }
 
+    fn instantiate(&mut self, clos: Closure<Value>, x: Symbol, v: Value) -> Result<Value> {
+        let mut norm = self.run_norm();
+        norm.instantiate(clos, x, v).map_err(Error::Normalize)
+    }
+
     fn read_back_type(&mut self, v: &Value) -> Result<Core> {
         let mut norm = self.run_norm();
         norm.read_back_type(v).map_err(Error::Normalize)
@@ -122,14 +141,13 @@ impl Elab {
         norm.read_back(n).map_err(Error::Normalize)
     }
 
-    fn in_expr<T, F>(&mut self, expr: &Expr, mut f: F) -> Result<T>
+    fn in_expr<T, F>(&self, expr: &Expr, mut f: F) -> Result<T>
     where
         F: FnOnce(&mut Self, &ExprAt<Loc>) -> Result<T>,
     {
-        let old_loc = self.loc.clone();
-        self.loc = expr.loc.clone();
-        let res = f(self, &expr.expr);
-        self.loc = old_loc;
+        let mut sub = self.clone();
+        sub.loc = expr.loc.clone();
+        let res = f(&mut sub, &expr.expr);
         res
     }
 
@@ -142,8 +160,71 @@ impl Elab {
     fn is_type_at(&mut self, expr: &ExprAt<Loc>) -> Result<Core> {
         match expr {
             ExprAt::Atom => Ok(Core::Atom),
+            ExprAt::Pair(a, d) => {
+                let x = self.fresh("x".into());
+                let a = self.is_type(a)?;
+                let a_val = self.eval(&a)?;
+                self.with_context(x.clone(), None, a_val);
+                let d = self.is_type(d)?;
+                Ok(Core::Sigma(x, a.into(), d.into()))
+            }
+            ExprAt::Pi(args, r) => {
+                let mut checked_args = Vec::new();
+                for arg in args {
+                    let (loc, x, arg) = arg;
+                    let arg = self.is_type(arg)?;
+                    let arg_val = self.eval(&arg)?;
+                    let fresh_x = self.fresh(x.clone());
+                    self.with_context(fresh_x.clone(), Some(loc.clone()), arg_val);
+                    self.rename(x.clone(), fresh_x);
+                    checked_args.push((x, arg));
+                }
+                let mut acc = self.is_type(r)?;
+                while let Some((x, arg)) = checked_args.pop() {
+                    acc = Core::Pi(x.clone(), Box::new(arg), Box::new(acc));
+                }
+                Ok(acc)
+            }
+            ExprAt::Arrow(arg, ts) => {
+                let mut checked_rs = Vec::new();
+                for t in ts {
+                    let x = self.fresh("x".into());
+                    let arg = self.is_type(arg)?;
+                    let arg_val = self.eval(&arg)?;
+                    self.with_context(x.clone(), None, arg_val);
+                    let r = self.is_type(t)?;
+                    checked_rs.push((x, r));
+                }
+                let mut acc = self.is_type(arg)?;
+                for (x, r) in checked_rs.into_iter().rev() {
+                    acc = Core::Pi(x, r.into(), acc.into());
+                }
+                Ok(acc)
+            }
+            // isType' (Arrow arg (t:|ts)) =
+            //   do x <- fresh (Symbol (T.pack "x"))
+            //      arg' <- isType arg
+            //      argVal <- eval arg'
+            //      r' <- withCtxExtension x Nothing argVal $
+            //            case ts of
+            //              -- FunF→1
+            //              [] ->
+            //                isType t
+            //              -- FunF→2
+            //              (ty : tys) ->
+            //                isType' (Arrow t (ty :| tys))
+            //      return (CPi x arg' r')
+            ExprAt::Eq(x, from, to) => {
+                let x = self.is_type(x)?;
+                let x_val = self.eval(&x)?;
+                Ok(Core::Eq(
+                    Box::new(x),
+                    Box::new(self.check(&x_val, from)?),
+                    Box::new(self.check(&x_val, to)?),
+                ))
+            }
             ExprAt::Trivial => Ok(Core::Trivial),
-            _ => todo!(),
+            e => todo!("{:?}", e),
         }
     }
 
@@ -213,7 +294,7 @@ impl Elab {
                 the_type: Value::U,
                 the_expr: Core::Trivial,
             }),
-            _ => todo!(),
+            e => todo!("{:?}", e),
         }
     }
 
@@ -226,6 +307,53 @@ impl Elab {
 
     fn check_at(&mut self, t: &Value, e: &ExprAt<Loc>) -> Result<Core> {
         match e {
+            ExprAt::Cons(a, d) => {
+                let (x, a_t, d_t) = t.as_sigma().map_err(Error::CheckConsExpectedSigma)?;
+                let a = self.check(a_t, a)?;
+                let a_v = self.eval(&a)?;
+                let d_t = self.instantiate(d_t.clone(), x.clone(), a_v)?;
+                let d = self.check(&d_t, d)?;
+                Ok(Core::Cons(a.into(), d.into()))
+            }
+            ExprAt::Lambda(xs, body) => {
+                // When the loop is done, type of the last body
+                let mut t = t.clone();
+                let mut zs = Vec::new();
+                for (loc, x) in xs.iter() {
+                    let (y, dom, ran) = t.as_pi().map_err(Error::CheckLambdaExpectedPi)?;
+                    let z = self.fresh(x.clone());
+                    self.with_context(z.clone(), Some(loc.clone()), *dom.clone());
+                    let body_t = self.instantiate(
+                        ran.clone(),
+                        y.clone(),
+                        Value::Neu(dom.clone(), Box::new(Neutral::Var(z.clone()))),
+                    )?;
+                    self.rename(x.clone(), y.clone());
+                    zs.push(z);
+                    t = body_t;
+                }
+                let mut out = None;
+                for z in zs.iter().rev() {
+                    match out {
+                        Some(cur) => {
+                            out = Some(Core::Lambda(z.clone(), Box::new(cur)));
+                        }
+                        None => {
+                            let body = self.check(&t, body)?;
+                            out = Some(Core::Lambda(z.clone(), Box::new(body)));
+                        }
+                    }
+                }
+                Ok(out.unwrap())
+            }
+            ExprAt::Same(e) => {
+                let (ty, from, to) = t.as_eq().map_err(Error::CheckSameExpectedEq)?;
+                let e = self.check(ty, e)?;
+                let v = self.eval(&e)?;
+                self.same(ty, from, &v)?;
+                self.same(ty, &v, to)?;
+                Ok(Core::Same(Box::new(e)))
+            }
             other => {
                 let Synth {
                     the_type: other_t,
@@ -262,6 +390,7 @@ impl Elab {
     }
 }
 
+#[derive(Debug)]
 pub struct Synth {
     pub the_type: Value,
     pub the_expr: Core,

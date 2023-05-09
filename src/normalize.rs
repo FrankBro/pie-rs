@@ -6,6 +6,9 @@ use crate::{
 #[derive(Debug)]
 pub enum Error {
     NotAFunction(Value),
+    VarNotFound(Symbol),
+    BadCar(Value),
+    BadCdr(Value),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -28,14 +31,32 @@ impl Norm {
         }
     }
 
+    fn in_bound(&mut self, x: Symbol) {
+        self.bound.push(x)
+    }
+
     fn fresh(&self, x: &str) -> Symbol {
         freshen(&self.bound, x.into())
     }
 
-    fn instantiate(&self, clos: Closure<Value>, x: Symbol, v: Value) -> Result<Value> {
+    fn close(&self, expr: Core) -> Closure<Value> {
+        let env = self.env.clone();
+        Closure { env, expr }
+    }
+
+    pub fn instantiate(&self, clos: Closure<Value>, x: Symbol, v: Value) -> Result<Value> {
         let mut env = clos.env.clone();
         env.push((x, v));
         self.with_env(env).eval(&clos.expr)
+    }
+
+    fn var(&self, x: &Symbol) -> Result<Value> {
+        // dbg!(x);
+        // dbg!(&self.env);
+        match self.env.iter().find(|(y, v)| x == y) {
+            Some((_, v)) => Ok(v.clone()),
+            None => Err(Error::VarNotFound(x.clone())),
+        }
     }
 
     pub fn eval(&mut self, core: &Core) -> Result<Value> {
@@ -72,10 +93,29 @@ impl Norm {
                 let stepv = self.eval(step)?;
                 self.ind_nat(tgtv, motv, basev, stepv)
             }
+            Core::Var(x) => self.var(x),
+            Core::Pi(x, dom, ran) => Ok(Value::Pi(
+                x.clone(),
+                Box::new(self.eval(dom)?),
+                self.close(*ran.clone()),
+            )),
+            Core::Lambda(x, body) => Ok(Value::Lambda(x.clone(), self.close(*body.clone()))),
+            Core::Sigma(x, a, d) => Ok(Value::Sigma(
+                x.clone(),
+                self.eval(a)?.into(),
+                self.close(*d.clone()),
+            )),
+            Core::Cons(a, d) => Ok(Value::Cons(self.eval(a)?.into(), self.eval(d)?.into())),
             Core::Trivial => Ok(Value::Trivial),
             Core::Sole => Ok(Value::Sole),
+            Core::Eq(ty, from, to) => Ok(Value::Eq(
+                Box::new(self.eval(ty)?),
+                Box::new(self.eval(from)?),
+                Box::new(self.eval(to)?),
+            )),
+            Core::Same(e) => Ok(Value::Same(Box::new(self.eval(e)?))),
             Core::The(_, e) => self.eval(e),
-            _ => todo!(),
+            e => todo!("{:?}", e),
         }
     }
 
@@ -90,6 +130,32 @@ impl Norm {
                 _ => unreachable!(),
             },
             other => Err(Error::NotAFunction(other)),
+        }
+    }
+
+    fn car(&self, v: &Value) -> Result<Value> {
+        match v {
+            Value::Cons(a, _) => Ok(*a.clone()),
+            Value::Neu(sig, ne) => match *sig.clone() {
+                Value::Sigma(_, a_t, _) => Ok(Value::Neu(a_t, Neutral::Car(ne.clone()).into())),
+                _ => Err(Error::BadCar(v.clone())),
+            },
+            _ => Err(Error::BadCar(v.clone())),
+        }
+    }
+
+    fn cdr(&self, v: &Value) -> Result<Value> {
+        match v {
+            Value::Cons(_, d) => Ok(*d.clone()),
+            Value::Neu(sig, ne) => match *sig.clone() {
+                Value::Sigma(x, _, d_t) => {
+                    let a = self.car(v)?;
+                    let t = self.instantiate(d_t, x, a)?;
+                    Ok(Value::Neu(t.into(), Neutral::Cdr(ne.clone()).into()))
+                }
+                _ => Err(Error::BadCdr(v.clone())),
+            },
+            _ => Err(Error::BadCdr(v.clone())),
         }
     }
 
@@ -250,12 +316,31 @@ impl Norm {
             Normal::The(Value::Nat, Value::Add1(k)) => self
                 .read_back(&Normal::The(Value::Nat, *k.clone()))
                 .map(|k| Core::Add1(Box::new(k))),
+            Normal::The(Value::Pi(x, dom, ran), fun) => {
+                let y = self.fresh(base_name(x, fun));
+                let y_val = Value::Neu(dom.clone(), Box::new(Neutral::Var(y.clone())));
+                let body_val = self.apply(fun.clone(), y_val.clone())?;
+                let body_type = self.instantiate(ran.clone(), x.clone(), y_val)?;
+                let body = self.read_back(&Normal::The(body_type, body_val))?;
+                Ok(Core::Lambda(y, Box::new(body)))
+            }
+            Normal::The(Value::Sigma(x, a_t, d_t), p) => {
+                let a_v = self.car(p)?;
+                let a = self.read_back(&Normal::The(*a_t.clone(), a_v.clone()))?;
+                let d_t = self.instantiate(d_t.clone(), x.clone(), a_v)?;
+                let d_v = self.cdr(p)?;
+                let d = self.read_back(&Normal::The(d_t, d_v))?;
+                Ok(Core::Cons(a.into(), d.into()))
+            }
             Normal::The(Value::Trivial, _) => Ok(Core::Sole),
+            Normal::The(Value::Eq(ty, _, _), Value::Same(v)) => Ok(Core::Same(Box::new(
+                self.read_back(&Normal::The(*ty.clone(), *v.clone()))?,
+            ))),
             Normal::The(Value::Absurd, Value::Neu(_, ne)) => Ok(Core::The(
                 Box::new(Core::Absurd),
                 Box::new(self.read_back_neutral(ne)?),
             )),
-            _ => todo!(),
+            e => todo!("{:?}", e),
         }
     }
 
@@ -263,9 +348,42 @@ impl Norm {
         match v {
             Value::Atom => Ok(Core::Atom),
             Value::Nat => Ok(Core::Nat),
+            Value::Pi(x, dom, ran) => {
+                let y = self.fresh(&x.name);
+                let ran_v = self.instantiate(
+                    ran.clone(),
+                    x.clone(),
+                    Value::Neu(dom.clone(), Box::new(Neutral::Var(y.clone()))),
+                )?;
+                self.in_bound(y.clone());
+                Ok(Core::Pi(
+                    y,
+                    Box::new(self.read_back_type(dom)?),
+                    Box::new(self.read_back_type(&ran_v)?),
+                ))
+            }
+            Value::Sigma(x, a, d) => {
+                let y = self.fresh(&x.name);
+                let d_v = self.instantiate(
+                    d.clone(),
+                    x.clone(),
+                    Value::Neu(a.clone(), Neutral::Var(y.clone()).into()),
+                )?;
+                let a = self.read_back_type(a)?;
+                self.in_bound(y.clone());
+                let d_v = self.read_back_type(&d_v)?;
+                Ok(Core::Sigma(y, a.into(), d_v.into()))
+            }
             Value::Trivial => Ok(Core::Absurd),
+            Value::Eq(t, from, to) => Ok(Core::Eq(
+                self.read_back_type(t)?.into(),
+                self.read_back(&Box::new(Normal::The(*t.clone(), *from.clone())))?
+                    .into(),
+                self.read_back(&Box::new(Normal::The(*t.clone(), *to.clone())))?
+                    .into(),
+            )),
             Value::U => Ok(Core::U),
-            _ => todo!(),
+            e => todo!("{:?}", e),
         }
     }
 
@@ -276,12 +394,19 @@ impl Norm {
     }
 }
 
+fn base_name<'a>(def: &'a Symbol, v: &'a Value) -> &'a str {
+    match v {
+        Value::Lambda(x, _) => &x.name,
+        _ => &def.name,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
         elab::{Elab, Synth},
         parse::parse_expr,
-        types::{Loc, Pos},
+        types::{Closure, Core, Loc, Pos, Value},
     };
 
     use super::Norm;
@@ -302,6 +427,56 @@ mod tests {
     }
 
     #[test]
+    fn test_synth_lambda() {
+        let input = "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same x)))";
+        let input_expr = parse_expr(SOURCE, input).unwrap();
+        let Synth {
+            the_type: actual_ty,
+            the_expr: actual_core,
+        } = elab().synth(&input_expr).unwrap();
+        let expected_ty = Value::Pi(
+            "x".into(),
+            Value::Trivial.into(),
+            Closure {
+                env: Vec::new(),
+                expr: Core::Pi(
+                    "y".into(),
+                    Box::new(Core::Trivial),
+                    Box::new(Core::Eq(
+                        Box::new(Core::Trivial),
+                        Box::new(Core::Var("x".into())),
+                        Box::new(Core::Var("y".into())),
+                    )),
+                ),
+            },
+        );
+        assert_eq!(expected_ty, actual_ty);
+        let expected_core = Core::The(
+            Box::new(Core::Pi(
+                "x".into(),
+                Box::new(Core::Trivial),
+                Box::new(Core::Pi(
+                    "y".into(),
+                    Box::new(Core::Trivial),
+                    Box::new(Core::Eq(
+                        Box::new(Core::Trivial),
+                        Box::new(Core::Var("x".into())),
+                        Box::new(Core::Var("y".into())),
+                    )),
+                )),
+            )),
+            Box::new(Core::Lambda(
+                "x".into(),
+                Box::new(Core::Lambda(
+                    "y".into(),
+                    Box::new(Core::Same(Box::new(Core::Var("x".into())))),
+                )),
+            )),
+        );
+        assert_eq!(expected_core, actual_core);
+    }
+
+    #[test]
     fn test_norm() {
         let cases = &[
             ("(the Trivial sole)", "sole"),
@@ -310,7 +485,6 @@ mod tests {
                 "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same x)))",
                 "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same sole)))",
             ),
-            /*
             (
                 "(the (Pi ((x (Pair Trivial Trivial))) (Pair Trivial Trivial)) (lambda (x) x))",
                 "(the (Pi ((y (Pair Trivial Trivial))) (Pair Trivial Trivial)) (lambda (z) (cons sole sole)))"
@@ -319,6 +493,7 @@ mod tests {
                 "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (x) x))",
                 "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (f) (lambda (x) sole)))"
             ),
+            /*
             (
                 "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (x) x))",
                 "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))"

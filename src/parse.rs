@@ -14,7 +14,7 @@ pub enum Error {
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
-struct Extras {
+pub struct Extras {
     line_breaks: usize,
 }
 
@@ -50,7 +50,7 @@ fn lex_nat_lit(lex: &mut Lexer<Token>) -> Option<u64> {
 #[logos(subpattern special_ident = r"(\+|-|\.\.\.)(?&subseq)*")]
 #[logos(subpattern ident = r"(?&normal_ident)|(?&special_ident)")]
 #[logos(extras = Extras)]
-enum Token {
+pub enum Token {
     #[token("U")]
     U,
     #[token("Nat")]
@@ -167,6 +167,16 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    fn expect<F>(&mut self, expected: Token, err_f: F) -> Result<()>
+    where
+        F: FnOnce(Option<Token>) -> Error,
+    {
+        match self.lex.next() {
+            Some(actual) if expected == actual => Ok(()),
+            token => Err(err_f(token)),
+        }
+    }
+
     fn loc(&self) -> Loc {
         let line = self.lex.extras.line_breaks;
         let span = self.lex.span();
@@ -184,12 +194,7 @@ impl<'a> Parser<'a> {
     }
 
     fn args(&mut self) -> Result<Vec1<(Loc, Symbol)>> {
-        match self.lex.next() {
-            Some(Token::LParen) => (),
-            token => {
-                return Err(Error::Arg(token));
-            }
-        }
+        self.expect(Token::LParen, Error::Arg)?;
         let arg = match self.lex.next() {
             Some(Token::Var(symbol)) => {
                 let loc = self.loc();
@@ -218,12 +223,8 @@ impl<'a> Parser<'a> {
     }
 
     fn typed_args(&mut self) -> Result<Vec1<(Loc, Symbol, Expr)>> {
-        match self.lex.next() {
-            Some(Token::LParen) => (),
-            token => {
-                return Err(Error::TypedArg(token));
-            }
-        }
+        self.expect(Token::LParen, Error::TypedArg)?;
+        self.expect(Token::LParen, Error::TypedArg)?;
         let typed_arg = match self.lex.next() {
             Some(Token::Var(symbol)) => {
                 let loc = self.loc();
@@ -234,9 +235,17 @@ impl<'a> Parser<'a> {
                 return Err(Error::TypedArg(token));
             }
         };
+        self.expect(Token::RParen, Error::TypedArg)?;
         let mut typed_args = Vec1::new(typed_arg);
+        let mut in_paren = false;
         loop {
             match self.lex.next() {
+                Some(Token::LParen) if !in_paren => {
+                    in_paren = true;
+                }
+                Some(Token::RParen) if in_paren => {
+                    in_paren = false;
+                }
                 Some(Token::Var(symbol)) => {
                     let loc = self.loc();
                     let expr = self.expr()?;

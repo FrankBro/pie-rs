@@ -35,7 +35,6 @@ fn split_name(t: &str) -> (&str, u64) {
         }
         mid => {
             let len = t.len();
-            dbg!(len);
             let (others, digits) = t.split_at(mid);
             let others = if others.is_empty() { "x" } else { others };
             let digits = if digits.is_empty() {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, f32::consts::E};
 
 use vec1::Vec1;
 
@@ -57,7 +57,7 @@ impl Loc {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Located<T> {
     pub loc: Loc,
     pub t: T,
@@ -73,6 +73,9 @@ pub type Expr = LocatedExpr<Loc>;
 
 type OutExpr = LocatedExpr<()>;
 
+pub type Arg<T> = (T, Symbol);
+pub type TypedArg<T> = (T, Symbol, LocatedExpr<T>);
+
 #[derive(Debug, PartialEq)]
 pub enum ExprAt<T> {
     The(LocatedExpr<T>, LocatedExpr<T>),
@@ -80,13 +83,13 @@ pub enum ExprAt<T> {
     Atom,
     Tick(Symbol),
     Pair(LocatedExpr<T>, LocatedExpr<T>),
-    Sigma(Vec1<(T, Symbol, LocatedExpr<T>)>, LocatedExpr<T>),
+    Sigma(Vec1<TypedArg<T>>, LocatedExpr<T>),
     Cons(LocatedExpr<T>, LocatedExpr<T>),
     Car(LocatedExpr<T>),
     Cdr(LocatedExpr<T>),
     Arrow(LocatedExpr<T>, Vec1<LocatedExpr<T>>),
-    Pi(Vec1<(T, Symbol, LocatedExpr<T>)>, LocatedExpr<T>),
-    Lambda(Vec1<(T, Symbol)>, LocatedExpr<T>),
+    Pi(Vec1<TypedArg<T>>, LocatedExpr<T>),
+    Lambda(Vec1<Arg<T>>, LocatedExpr<T>),
     App(LocatedExpr<T>, Vec1<LocatedExpr<T>>),
     Nat,
     Zero,
@@ -260,7 +263,7 @@ enum TopLevel<T> {
     Example(T),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Atom,
     Tick(Symbol),
@@ -289,7 +292,37 @@ pub enum Value {
     Neu(Box<Value>, Box<Neutral>),
 }
 
-#[derive(Clone, Debug)]
+impl Value {
+    pub fn as_pi(&self) -> Result<(&Symbol, &Box<Value>, &Closure<Value>), Value> {
+        match self {
+            Value::Pi(x, a, b) => Ok((x, a, b)),
+            _ => Err(self.clone()),
+        }
+    }
+
+    pub fn as_sigma(&self) -> Result<(&Symbol, &Box<Value>, &Closure<Value>), Value> {
+        match self {
+            Value::Sigma(x, a, b) => Ok((x, a, b)),
+            _ => Err(self.clone()),
+        }
+    }
+
+    pub fn as_vec(&self) -> Result<(&Box<Value>, &Box<Value>), Value> {
+        match self {
+            Value::Vec(e, l) => Ok((e, l)),
+            _ => Err(self.clone()),
+        }
+    }
+
+    pub fn as_eq(&self) -> Result<(&Box<Value>, &Box<Value>, &Box<Value>), Value> {
+        match self {
+            Value::Eq(t, from, to) => Ok((t, from, to)),
+            _ => Err(self.clone()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Neutral {
     Var(Symbol),
     Car(Box<Neutral>),
@@ -317,12 +350,12 @@ pub enum Neutral {
     Todo(Loc, Value),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Normal {
     The(Value, Value),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Closure<T> {
     pub env: Env<T>,
     pub expr: Core,
@@ -336,6 +369,7 @@ pub enum MessagePart<T> {
     Val(T),
 }
 
+#[derive(Clone)]
 pub enum ElabInfo {
     ExprHasType(Core),
     ExprIsType,
