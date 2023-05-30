@@ -1,4 +1,5 @@
 use crate::{
+    alpha_equiv::{alpha_equiv, Equiv},
     fresh::freshen,
     types::{Closure, Core, Env, Neutral, Normal, Symbol, Value},
 };
@@ -9,6 +10,7 @@ pub enum Error {
     VarNotFound(Symbol),
     BadCar(Value),
     BadCdr(Value),
+    ReadBackNeutralMismatchedTypes(Core, Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -51,8 +53,6 @@ impl Norm {
     }
 
     fn var(&self, x: &Symbol) -> Result<Value> {
-        // dbg!(x);
-        // dbg!(&self.env);
         match self.env.iter().find(|(y, v)| x == y) {
             Some((_, v)) => Ok(v.clone()),
             None => Err(Error::VarNotFound(x.clone())),
@@ -93,6 +93,7 @@ impl Norm {
                 let stepv = self.eval(step)?;
                 self.ind_nat(tgtv, motv, basev, stepv)
             }
+            Core::Nat => Ok(Value::Nat),
             Core::Var(x) => self.var(x),
             Core::Pi(x, dom, ran) => Ok(Value::Pi(
                 x.clone(),
@@ -100,6 +101,11 @@ impl Norm {
                 self.close(*ran.clone()),
             )),
             Core::Lambda(x, body) => Ok(Value::Lambda(x.clone(), self.close(*body.clone()))),
+            Core::App(rator, rand) => {
+                let fun = self.eval(rator)?;
+                let arg = self.eval(rand)?;
+                self.apply(fun, arg)
+            }
             Core::Sigma(x, a, d) => Ok(Value::Sigma(
                 x.clone(),
                 self.eval(a)?.into(),
@@ -340,6 +346,14 @@ impl Norm {
                 Box::new(Core::Absurd),
                 Box::new(self.read_back_neutral(ne)?),
             )),
+            Normal::The(t1, Value::Neu(t2, neu)) => {
+                let t1 = self.read_back_type(t1)?;
+                let t2 = self.read_back_type(t2)?;
+                match alpha_equiv(&t1, &t2) {
+                    Equiv::Equiv => self.read_back_neutral(neu),
+                    Equiv::NotEquiv(_, _) => Err(Error::ReadBackNeutralMismatchedTypes(t1, t2)),
+                }
+            }
             e => todo!("{:?}", e),
         }
     }
@@ -389,7 +403,12 @@ impl Norm {
 
     fn read_back_neutral(&mut self, n: &Neutral) -> Result<Core> {
         match n {
-            _ => todo!(),
+            Neutral::Var(x) => Ok(Core::Var(x.clone())),
+            Neutral::App(neu, arg) => Ok(Core::App(
+                self.read_back_neutral(neu)?.into(),
+                self.read_back(arg)?.into(),
+            )),
+            e => todo!("{:?}", e),
         }
     }
 }
@@ -424,6 +443,51 @@ mod tests {
 
     fn norm() -> Norm {
         Norm::default()
+    }
+
+    #[test]
+    fn test_synth_arrow() {
+        let input = "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))";
+        let input_expr = parse_expr(SOURCE, input).unwrap();
+        let Synth {
+            the_type: actual_ty,
+            the_expr: actual_core,
+        } = elab().synth(&input_expr).unwrap();
+        let expected_ty = Value::Pi(
+            "x".into(),
+            Value::Pi(
+                "x".into(),
+                Value::Nat.into(),
+                Closure {
+                    env: Vec::new(),
+                    expr: Core::Nat,
+                },
+            )
+            .into(),
+            Closure {
+                env: Vec::new(),
+                expr: Core::Pi("x₁".into(), Core::Nat.into(), Core::Nat.into()),
+            },
+        );
+        assert_eq!(expected_ty, actual_ty);
+        let expected_core = Core::The(
+            Core::Pi(
+                "x".into(),
+                Core::Pi("x".into(), Core::Nat.into(), Core::Nat.into()).into(),
+                Core::Pi("x₁".into(), Core::Nat.into(), Core::Nat.into()).into(),
+            )
+            .into(),
+            Core::Lambda(
+                "f".into(),
+                Core::Lambda(
+                    "x".into(),
+                    Core::App(Core::Var("f".into()).into(), Core::Var("x".into()).into()).into(),
+                )
+                .into(),
+            )
+            .into(),
+        );
+        assert_eq!(expected_core, actual_core);
     }
 
     #[test]
@@ -493,15 +557,15 @@ mod tests {
                 "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (x) x))",
                 "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (f) (lambda (x) sole)))"
             ),
-            /*
             (
                 "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (x) x))",
-                "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))"
+                "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))",
             ),
             (
                 "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))",
                 "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))"
             ),
+            /*
             ("(which-Nat zero 't (lambda (x) 'nil))", "(the Atom 't)"),
             ("(which-Nat 13 't (lambda (x) 'nil))", "(the Atom 'nil)"),
             (

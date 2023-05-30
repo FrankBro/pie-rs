@@ -1,4 +1,4 @@
-use std::{collections::HashMap, f32::consts::E};
+use std::fmt::Debug;
 
 use vec1::Vec1;
 
@@ -19,20 +19,16 @@ impl From<&str> for Symbol {
     }
 }
 
-#[rustfmt::skip]
-const keywords: &[&str] = &[
-    "U", "Nat", "zero", "add1", "which-Nat", "iter-Nat", "rec-Nat", "ind-Nat",
-    "->", "→", "Π", "λ", "Pi", "lambda", "quote", "Atom", "car", "cdr", "cons",
-    "Σ", "Sigma", "Pair", "Trivial", "sole", "List", "::", "nil", "rec-List",
-    "ind-List", "Absurd", "ind-Absurd", "=", "same", "replace", "trans", "cong",
-    "symm", "ind-=", "Vec", "vecnil", "vec::", "head", "tail", "ind-Vec",
-    "Either", "left", "right", "ind-Either", "TODO", "the",
-];
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Pos {
     pub line: usize,
     pub col: usize,
+}
+
+impl Debug for Pos {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.line, self.col)
+    }
 }
 
 pub struct Positioned<T> {
@@ -40,7 +36,7 @@ pub struct Positioned<T> {
     pub t: T,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Loc {
     pub source: String,
     pub start: Pos,
@@ -57,13 +53,19 @@ impl Loc {
     }
 }
 
+impl Debug for Loc {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} from {:?} to {:?}", self.source, self.start, self.end)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Located<T> {
     pub loc: Loc,
     pub t: T,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LocatedExpr<T> {
     pub loc: T,
     pub expr: Box<ExprAt<T>>,
@@ -76,7 +78,7 @@ type OutExpr = LocatedExpr<()>;
 pub type Arg<T> = (T, Symbol);
 pub type TypedArg<T> = (T, Symbol, LocatedExpr<T>);
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ExprAt<T> {
     The(LocatedExpr<T>, LocatedExpr<T>),
     Var(Symbol),
@@ -307,6 +309,13 @@ impl Value {
         }
     }
 
+    pub fn as_list(&self) -> Result<&Box<Value>, Value> {
+        match self {
+            Value::List(e) => Ok(e),
+            _ => Err(self.clone()),
+        }
+    }
+
     pub fn as_vec(&self) -> Result<(&Box<Value>, &Box<Value>), Value> {
         match self {
             Value::Vec(e, l) => Ok((e, l)),
@@ -317,6 +326,13 @@ impl Value {
     pub fn as_eq(&self) -> Result<(&Box<Value>, &Box<Value>, &Box<Value>), Value> {
         match self {
             Value::Eq(t, from, to) => Ok((t, from, to)),
+            _ => Err(self.clone()),
+        }
+    }
+
+    pub fn as_either(&self) -> Result<(&Box<Value>, &Box<Value>), Value> {
+        match self {
+            Value::Either(a, b) => Ok((a, b)),
             _ => Err(self.clone()),
         }
     }
