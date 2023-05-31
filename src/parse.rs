@@ -149,7 +149,7 @@ pub enum Token {
     IndAbsurd,
     #[regex(r"(?&ident)", lex_var)]
     Var(String),
-    #[regex("[0-9]", lex_nat_lit)]
+    #[regex("[0-9]+", lex_nat_lit)]
     NatLit(u64),
 
     #[token("\n", |lex| {
@@ -334,6 +334,7 @@ impl<'a> Parser<'a> {
             _ => match self.lex.next() {
                 Some(Token::RParen) => (),
                 token => {
+                    dbg!(&expr_at);
                     return Err(Error::ExpectedClosedParen(token));
                 }
             },
@@ -478,6 +479,17 @@ mod tests {
                     })),
                 },
             )),
+        };
+        let actual = parse_expr(SOURCE, input).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_lit_bug() {
+        let input = "13";
+        let expected = Expr {
+            loc: loc(1, 3),
+            expr: ExprAt::NatLit(13).into(),
         };
         let actual = parse_expr(SOURCE, input).unwrap();
         assert_eq!(expected, actual);

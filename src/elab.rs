@@ -26,6 +26,7 @@ pub enum Error {
     CheckEitherLeftExpectedEither(Value),
     CheckEitherRightExpectedEither(Value),
     SynthAppNotPiType(Core),
+    InvalidAtom,
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -137,6 +138,13 @@ impl Elab {
     fn eval(&mut self, expr: &Core) -> Result<Value> {
         let mut norm = self.run_norm();
         norm.eval(expr).map_err(Error::Normalize)
+    }
+
+    fn eval_in_env(&mut self, env: Env<Value>, c: Core) -> Result<Value> {
+        let used_names = self.context.names();
+        Norm::new(used_names, env)
+            .eval(&c)
+            .map_err(Error::Normalize)
     }
 
     fn instantiate(&mut self, clos: Closure<Value>, x: Symbol, v: Value) -> Result<Value> {
@@ -283,6 +291,22 @@ impl Elab {
                 let x = self.apply_renaming(x)?;
                 self.find_var(x)
             }
+            ExprAt::Tick(sym) => {
+                // TODO: Can this even happen with the lexer/parser?
+                if sym
+                    .name
+                    .chars()
+                    .all(|c| c.is_ascii_alphabetic() || c == '-')
+                    && !sym.name.is_empty()
+                {
+                    Ok(Synth {
+                        the_type: Value::Atom,
+                        the_expr: Core::Tick(sym.clone()),
+                    })
+                } else {
+                    Err(Error::InvalidAtom)
+                }
+            }
             ExprAt::App(f, args) => {
                 let s = self.synth(f)?;
                 let mut f_t = s.the_type;
@@ -327,6 +351,27 @@ impl Elab {
                         expr: Box::new(ExprAt::NatLit(*n - 1)),
                     }))
                 }
+            }
+            ExprAt::WhichNat(tgt, base, step) => {
+                let tgt = self.check(&Value::Nat, tgt)?;
+                let Synth {
+                    the_type: bt_v,
+                    the_expr: base,
+                } = self.synth(base)?;
+                let step_t = self.eval_in_env(
+                    vec![("base-type".into(), bt_v.clone())],
+                    Core::Pi(
+                        "x".into(),
+                        Core::Nat.into(),
+                        Core::Var("base-type".into()).into(),
+                    ),
+                )?;
+                let step = self.check(&step_t, step)?;
+                let bt = self.read_back_type(&bt_v)?;
+                Ok(Synth {
+                    the_type: bt_v,
+                    the_expr: Core::WhichNat(tgt.into(), bt.into(), base.into(), step.into()),
+                })
             }
             ExprAt::Sole => Ok(Synth {
                 the_type: Value::Trivial,

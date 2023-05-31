@@ -318,6 +318,7 @@ impl Norm {
 
     pub fn read_back(&mut self, n: &Normal) -> Result<Core> {
         match n {
+            Normal::The(Value::Atom, Value::Tick(x)) => Ok(Core::Tick(x.clone())),
             Normal::The(Value::Nat, Value::Zero) => Ok(Core::Zero),
             Normal::The(Value::Nat, Value::Add1(k)) => self
                 .read_back(&Normal::The(Value::Nat, *k.clone()))
@@ -404,6 +405,12 @@ impl Norm {
     fn read_back_neutral(&mut self, n: &Neutral) -> Result<Core> {
         match n {
             Neutral::Var(x) => Ok(Core::Var(x.clone())),
+            Neutral::WhichNat(tgt, base @ Normal::The(t, _), step) => Ok(Core::WhichNat(
+                self.read_back_neutral(tgt)?.into(),
+                self.read_back_type(t)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
             Neutral::App(neu, arg) => Ok(Core::App(
                 self.read_back_neutral(neu)?.into(),
                 self.read_back(arg)?.into(),
@@ -565,13 +572,13 @@ mod tests {
                 "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))",
                 "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))"
             ),
-            /*
             ("(which-Nat zero 't (lambda (x) 'nil))", "(the Atom 't)"),
             ("(which-Nat 13 't (lambda (x) 'nil))", "(the Atom 'nil)"),
             (
                 "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))",
                 "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))"
             ),
+            /*
             ("(iter-Nat zero 3 (lambda (x) (add1 x)))" , "(the Nat 3)"),
             ("(iter-Nat 2 3 (lambda (x) (add1 x)))" , "(the Nat 5)"),
             (
