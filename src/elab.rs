@@ -373,6 +373,36 @@ impl Elab {
                     the_expr: Core::WhichNat(tgt.into(), bt.into(), base.into(), step.into()),
                 })
             }
+            ExprAt::IterNat(tgt, base, step) => {
+                let tgt = self.check(&Value::Nat, tgt)?;
+                let Synth {
+                    the_type: bt_v,
+                    the_expr: base,
+                } = self.synth(base)?;
+                let step_t = self.eval_in_env(
+                    vec![("base-type".into(), bt_v.clone())],
+                    Core::Pi(
+                        "x".into(),
+                        Core::Var("base-type".into()).into(),
+                        Core::Var("base-type".into()).into(),
+                    ),
+                )?;
+                let step = self.check(&step_t, step)?;
+                let bt = self.read_back_type(&bt_v)?;
+                Ok(Synth {
+                    the_type: bt_v,
+                    the_expr: Core::IterNat(tgt.into(), bt.into(), base.into(), step.into()),
+                })
+            }
+            // synth' (IterNat tgt base step) =
+            //   do tgt' <- check VNat tgt
+            //      SThe bt base' <- synth base
+            //      stepT <- evalInEnv
+            //                 (None :> (sym "base-type", bt))
+            //                 (CPi (sym "x") (CVar (sym "base-type")) (CVar (sym "base-type")))
+            //      step' <- check stepT step
+            //      bt' <- readBackType bt
+            //      return (SThe bt (CIterNat tgt' bt' base' step'))
             ExprAt::Sole => Ok(Synth {
                 the_type: Value::Trivial,
                 the_expr: Core::Sole,

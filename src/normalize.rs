@@ -411,6 +411,12 @@ impl Norm {
                 self.read_back(base)?.into(),
                 self.read_back(step)?.into(),
             )),
+            Neutral::IterNat(tgt, base @ Normal::The(t, _), step) => Ok(Core::IterNat(
+                self.read_back_neutral(tgt)?.into(),
+                self.read_back_type(t)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
             Neutral::App(neu, arg) => Ok(Core::App(
                 self.read_back_neutral(neu)?.into(),
                 self.read_back(arg)?.into(),
@@ -578,13 +584,13 @@ mod tests {
                 "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))",
                 "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))"
             ),
-            /*
             ("(iter-Nat zero 3 (lambda (x) (add1 x)))" , "(the Nat 3)"),
             ("(iter-Nat 2 3 (lambda (x) (add1 x)))" , "(the Nat 5)"),
             (
                 "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))",
                 "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))"
             ),
+            /*
             (
                 "(rec-Nat zero (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
                 "(the (List Nat) nil)"
