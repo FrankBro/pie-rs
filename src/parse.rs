@@ -334,7 +334,6 @@ impl<'a> Parser<'a> {
             _ => match self.lex.next() {
                 Some(Token::RParen) => (),
                 token => {
-                    dbg!(&expr_at);
                     return Err(Error::ExpectedClosedParen(token));
                 }
             },

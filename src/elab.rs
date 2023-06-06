@@ -394,15 +394,47 @@ impl Elab {
                     the_expr: Core::IterNat(tgt.into(), bt.into(), base.into(), step.into()),
                 })
             }
-            // synth' (IterNat tgt base step) =
-            //   do tgt' <- check VNat tgt
-            //      SThe bt base' <- synth base
-            //      stepT <- evalInEnv
-            //                 (None :> (sym "base-type", bt))
-            //                 (CPi (sym "x") (CVar (sym "base-type")) (CVar (sym "base-type")))
-            //      step' <- check stepT step
-            //      bt' <- readBackType bt
-            //      return (SThe bt (CIterNat tgt' bt' base' step'))
+            ExprAt::RecNat(tgt, base, step) => {
+                let tgt = self.check(&Value::Nat, tgt)?;
+                let Synth {
+                    the_type: bt_v,
+                    the_expr: base,
+                } = self.synth(base)?;
+                let step_t = self.eval_in_env(
+                    vec![("base-type".into(), bt_v.clone())],
+                    Core::Pi(
+                        "n".into(),
+                        Core::Nat.into(),
+                        Core::Pi(
+                            "x".into(),
+                            Core::Var("base-type".into()).into(),
+                            Core::Var("base-type".into()).into(),
+                        )
+                        .into(),
+                    ),
+                )?;
+                let step = self.check(&step_t, step)?;
+                let bt = self.read_back_type(&bt_v)?;
+                Ok(Synth {
+                    the_type: bt_v,
+                    the_expr: Core::RecNat(tgt.into(), bt.into(), base.into(), step.into()),
+                })
+            }
+            ExprAt::ListCons(e, es) => {
+                let Synth {
+                    the_type: et,
+                    the_expr: e,
+                } = self.synth(e)?;
+                let es = self.check(&Value::List(et.clone().into()), es)?;
+                Ok(Synth {
+                    the_type: Value::List(et.into()),
+                    the_expr: Core::ListCons(e.into(), es.into()),
+                })
+            }
+            // synth' (ListCons e es) =
+            //   do SThe et e' <- synth e
+            //      es' <- check (VList et) es
+            //      return (SThe (VList et) (CListCons e' es'))
             ExprAt::Sole => Ok(Synth {
                 the_type: Value::Trivial,
                 the_expr: Core::Sole,

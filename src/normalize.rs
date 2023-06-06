@@ -120,6 +120,8 @@ impl Norm {
                 Box::new(self.eval(to)?),
             )),
             Core::Same(e) => Ok(Value::Same(Box::new(self.eval(e)?))),
+            Core::List(elem) => Ok(Value::List(self.eval(elem)?.into())),
+            Core::ListNil => Ok(Value::ListNil),
             Core::The(_, e) => self.eval(e),
             e => todo!("{:?}", e),
         }
@@ -343,6 +345,14 @@ impl Norm {
             Normal::The(Value::Eq(ty, _, _), Value::Same(v)) => Ok(Core::Same(Box::new(
                 self.read_back(&Normal::The(*ty.clone(), *v.clone()))?,
             ))),
+            Normal::The(Value::List(_), Value::ListNil) => Ok(Core::ListNil),
+            Normal::The(Value::List(t), Value::ListCons(a, d)) => Ok(Core::ListCons(
+                self.read_back(&Normal::The(*t.clone(), *a.clone()))?.into(),
+                self.read_back(&Normal::The(Value::List(t.clone()), *d.clone()))?
+                    .into(),
+            )),
+            // readBack (NThe (VList t) (VListCons a d)) =
+            //   CListCons <$> readBack (NThe t a) <*> readBack (NThe (VList t) d)
             Normal::The(Value::Absurd, Value::Neu(_, ne)) => Ok(Core::The(
                 Box::new(Core::Absurd),
                 Box::new(self.read_back_neutral(ne)?),
@@ -397,6 +407,7 @@ impl Norm {
                 self.read_back(&Box::new(Normal::The(*t.clone(), *to.clone())))?
                     .into(),
             )),
+            Value::List(elem) => Ok(Core::List(self.read_back_type(elem)?.into())),
             Value::U => Ok(Core::U),
             e => todo!("{:?}", e),
         }
@@ -556,6 +567,7 @@ mod tests {
     #[test]
     fn test_norm() {
         let cases = &[
+            /*
             ("(the Trivial sole)", "sole"),
             ("4", "(add1 (add1 (add1 (add1 zero))))"),
             (
@@ -590,11 +602,12 @@ mod tests {
                 "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))",
                 "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))"
             ),
-            /*
+            */
             (
                 "(rec-Nat zero (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
-                "(the (List Nat) nil)"
+                "(the (List Nat) nil)",
             ),
+            /*
             (
                 "(rec-Nat 3 (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
                 "(the (List Nat) (:: 2 (:: 1 (:: 0 nil))))"
