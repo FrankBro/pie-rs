@@ -122,6 +122,9 @@ impl Norm {
             Core::Same(e) => Ok(Value::Same(Box::new(self.eval(e)?))),
             Core::List(elem) => Ok(Value::List(self.eval(elem)?.into())),
             Core::ListNil => Ok(Value::ListNil),
+            Core::ListCons(e, es) => {
+                Ok(Value::ListCons(self.eval(e)?.into(), self.eval(es)?.into()))
+            }
             Core::The(_, e) => self.eval(e),
             e => todo!("{:?}", e),
         }
@@ -428,6 +431,12 @@ impl Norm {
                 self.read_back(base)?.into(),
                 self.read_back(step)?.into(),
             )),
+            Neutral::RecNat(tgt, base @ Normal::The(t, _), step) => Ok(Core::RecNat(
+                self.read_back_neutral(tgt)?.into(),
+                self.read_back_type(t)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
             Neutral::App(neu, arg) => Ok(Core::App(
                 self.read_back_neutral(neu)?.into(),
                 self.read_back(arg)?.into(),
@@ -602,20 +611,20 @@ mod tests {
                 "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))",
                 "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))"
             ),
-            */
             (
                 "(rec-Nat zero (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
                 "(the (List Nat) nil)",
             ),
-            /*
+            */
             (
                 "(rec-Nat 3 (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
-                "(the (List Nat) (:: 2 (:: 1 (:: 0 nil))))"
+                "(the (List Nat) (:: 2 (:: 1 (:: 0 nil))))",
             ),
             (
                 "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))",
                 "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))"
             ),
+            /*
             (
                 "(ind-Nat zero (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 0) vecnil)"
