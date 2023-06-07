@@ -11,6 +11,8 @@ pub enum Error {
     BadCar(Value),
     BadCdr(Value),
     ReadBackNeutralMismatchedTypes(Core, Core),
+    ReadBackVecConsNotAdd1(Value),
+    BadReadBack(Normal),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -112,6 +114,14 @@ impl Norm {
                 self.close(*d.clone()),
             )),
             Core::Cons(a, d) => Ok(Value::Cons(self.eval(a)?.into(), self.eval(d)?.into())),
+            Core::Car(p) => {
+                let p = self.eval(p)?;
+                self.car(&p)
+            }
+            Core::Cdr(p) => {
+                let p = self.eval(p)?;
+                self.cdr(&p)
+            }
             Core::Trivial => Ok(Value::Trivial),
             Core::Sole => Ok(Value::Sole),
             Core::Eq(ty, from, to) => Ok(Value::Eq(
@@ -120,13 +130,96 @@ impl Norm {
                 Box::new(self.eval(to)?),
             )),
             Core::Same(e) => Ok(Value::Same(Box::new(self.eval(e)?))),
+            Core::Replace(tgt, mot, base) => {
+                let tgt = self.eval(tgt)?;
+                let mot = self.eval(mot)?;
+                let base = self.eval(base)?;
+                self.replace(tgt, mot, base)
+            }
+            Core::Trans(tgt1, tgt2) => {
+                let tgt1 = self.eval(tgt1)?;
+                let tgt2 = self.eval(tgt2)?;
+                self.trans(tgt1, tgt2)
+            }
+            Core::Cong(e1, e2, e3) => {
+                let e1 = self.eval(e1)?;
+                let e2 = self.eval(e2)?;
+                let e3 = self.eval(e3)?;
+                self.cong(e1, e2, e3)
+            }
+            Core::Symm(p) => {
+                let p = self.eval(p)?;
+                self.symm(p)
+            }
+            Core::IndEq(tgt, mot, base) => {
+                let tgt = self.eval(tgt)?;
+                let mot = self.eval(mot)?;
+                let base = self.eval(base)?;
+                self.ind_eq(tgt, mot, base)
+            }
             Core::List(elem) => Ok(Value::List(self.eval(elem)?.into())),
             Core::ListNil => Ok(Value::ListNil),
             Core::ListCons(e, es) => {
                 Ok(Value::ListCons(self.eval(e)?.into(), self.eval(es)?.into()))
             }
+            Core::RecList(tgt, bt, base, step) => {
+                let tgt = self.eval(tgt)?;
+                let bt = self.eval(bt)?;
+                let base = self.eval(base)?;
+                let step = self.eval(step)?;
+                self.rec_list(tgt, bt, base, step)
+            }
+            Core::IndList(tgt, mot, base, step) => {
+                let tgt = self.eval(tgt)?;
+                let mot = self.eval(mot)?;
+                let base = self.eval(base)?;
+                let step = self.eval(step)?;
+                self.ind_list(tgt, mot, base, step)
+            }
+            Core::Vec(elem, len) => Ok(Value::Vec(self.eval(elem)?.into(), self.eval(len)?.into())),
+            Core::VecNil => Ok(Value::VecNil),
+            Core::VecCons(e, es) => Ok(Value::VecCons(self.eval(e)?.into(), self.eval(es)?.into())),
+            Core::VecHead(es) => {
+                let es = self.eval(es)?;
+                self.head(es)
+            }
+            Core::VecTail(es) => {
+                let es = self.eval(es)?;
+                self.tail(es)
+            }
+            Core::IndVec(k, es, mot, base, step) => {
+                let k = self.eval(k)?;
+                let es = self.eval(es)?;
+                let mot = self.eval(mot)?;
+                let base = self.eval(base)?;
+                let step = self.eval(step)?;
+                self.ind_vec(k, es, mot, base, step)
+            }
+            Core::Either(l, r) => Ok(Value::Either(self.eval(l)?.into(), self.eval(r)?.into())),
+            Core::Left(l) => Ok(Value::Left(self.eval(l)?.into())),
+            Core::Right(r) => Ok(Value::Right(self.eval(r)?.into())),
+            Core::IndEither(tgt, mot, l, r) => {
+                let tgt = self.eval(tgt)?;
+                let mot = self.eval(mot)?;
+                let l = self.eval(l)?;
+                let r = self.eval(r)?;
+                self.ind_either(tgt, mot, l, r)
+            }
+            Core::Absurd => Ok(Value::Absurd),
+            Core::IndAbsurd(tgt, mot) => {
+                let tgt = self.eval(tgt)?;
+                let mot = self.eval(mot)?;
+                self.ind_absurd(tgt, mot)
+            }
+            Core::U => Ok(Value::U),
             Core::The(_, e) => self.eval(e),
-            e => todo!("{:?}", e),
+            Core::Todo(loc, ty) => {
+                let tv = self.eval(ty)?;
+                Ok(Value::Neu(
+                    tv.clone().into(),
+                    Neutral::Todo(loc.clone(), tv).into(),
+                ))
+            }
         }
     }
 
@@ -321,6 +414,54 @@ impl Norm {
         }
     }
 
+    fn rec_list(&self, tgt: Value, bt: Value, base: Value, step: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn ind_list(&self, tgt: Value, mot: Value, base: Value, step: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn replace(&self, tgt: Value, mot: Value, base: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn trans(&self, tgt1: Value, tgt2: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn cong(&self, e1: Value, e2: Value, e3: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn symm(&self, p: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn ind_eq(&self, tgt: Value, mot: Value, base: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn head(&self, es: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn tail(&self, es: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn ind_vec(&self, k: Value, es: Value, mot: Value, base: Value, step: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn ind_either(&self, tgt: Value, mot: Value, l: Value, r: Value) -> Result<Value> {
+        todo!()
+    }
+
+    fn ind_absurd(&self, tgt: Value, mot: Value) -> Result<Value> {
+        todo!()
+    }
+
     pub fn read_back(&mut self, n: &Normal) -> Result<Core> {
         match n {
             Normal::The(Value::Atom, Value::Tick(x)) => Ok(Core::Tick(x.clone())),
@@ -354,12 +495,29 @@ impl Norm {
                 self.read_back(&Normal::The(Value::List(t.clone()), *d.clone()))?
                     .into(),
             )),
-            // readBack (NThe (VList t) (VListCons a d)) =
-            //   CListCons <$> readBack (NThe t a) <*> readBack (NThe (VList t) d)
+            Normal::The(Value::Vec(_, _), Value::VecNil) => Ok(Core::VecNil),
+            Normal::The(Value::Vec(elem, es), Value::VecCons(v, vs)) => match *es.clone() {
+                Value::Add1(len) => Ok(Core::VecCons(
+                    self.read_back(&Normal::The(*elem.clone(), *v.clone()))?
+                        .into(),
+                    self.read_back(&Normal::The(Value::Vec(elem.clone(), len), *vs.clone()))?
+                        .into(),
+                )),
+                es => Err(Error::ReadBackVecConsNotAdd1(es)),
+            },
+            Normal::The(Value::Either(lt, _), Value::Left(l)) => Ok(Core::Left(
+                self.read_back(&Normal::The(*lt.clone(), *l.clone()))?
+                    .into(),
+            )),
+            Normal::The(Value::Either(_, rt), Value::Right(r)) => Ok(Core::Right(
+                self.read_back(&Normal::The(*rt.clone(), *r.clone()))?
+                    .into(),
+            )),
             Normal::The(Value::Absurd, Value::Neu(_, ne)) => Ok(Core::The(
                 Box::new(Core::Absurd),
                 Box::new(self.read_back_neutral(ne)?),
             )),
+            Normal::The(Value::U, t) => self.read_back_type(t),
             Normal::The(t1, Value::Neu(t2, neu)) => {
                 let t1 = self.read_back_type(t1)?;
                 let t2 = self.read_back_type(t2)?;
@@ -368,7 +526,7 @@ impl Norm {
                     Equiv::NotEquiv(_, _) => Err(Error::ReadBackNeutralMismatchedTypes(t1, t2)),
                 }
             }
-            e => todo!("{:?}", e),
+            e => Err(Error::BadReadBack(e.clone())),
         }
     }
 
@@ -624,11 +782,11 @@ mod tests {
                 "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))",
                 "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))"
             ),
-            /*
             (
                 "(ind-Nat zero (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 0) vecnil)"
             ),
+            /*
             (
                 "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 2) (vec:: 1 (vec:: 0 vecnil)))"
