@@ -13,6 +13,9 @@ pub enum Error {
     ReadBackNeutralMismatchedTypes(Core, Core),
     ReadBackVecConsNotAdd1(Value),
     BadReadBack(Normal),
+    BadReadBackType(Value),
+    ReadBackTypeNeuNotU(Value),
+    BadReadBackNeutral(Neutral),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -223,7 +226,7 @@ impl Norm {
         }
     }
 
-    fn apply(&self, f: Value, arg: Value) -> Result<Value> {
+    pub fn apply(&self, f: Value, arg: Value) -> Result<Value> {
         match f {
             Value::Lambda(x, clos) => self.instantiate(clos, x, arg),
             Value::Neu(v, f) => match *v {
@@ -237,7 +240,7 @@ impl Norm {
         }
     }
 
-    fn car(&self, v: &Value) -> Result<Value> {
+    pub fn car(&self, v: &Value) -> Result<Value> {
         match v {
             Value::Cons(a, _) => Ok(*a.clone()),
             Value::Neu(sig, ne) => match *sig.clone() {
@@ -569,8 +572,22 @@ impl Norm {
                     .into(),
             )),
             Value::List(elem) => Ok(Core::List(self.read_back_type(elem)?.into())),
+            Value::Vec(elem, len) => Ok(Core::Vec(
+                self.read_back_type(elem)?.into(),
+                self.read_back(&Normal::The(Value::Nat, *len.clone()))?
+                    .into(),
+            )),
+            Value::Either(l, r) => Ok(Core::Either(
+                self.read_back_type(l)?.into(),
+                self.read_back_type(r)?.into(),
+            )),
+            Value::Absurd => Ok(Core::Absurd),
             Value::U => Ok(Core::U),
-            e => todo!("{:?}", e),
+            Value::Neu(f, ne) => match *f.clone() {
+                Value::U => self.read_back_neutral(ne),
+                f => Err(Error::ReadBackTypeNeuNotU(f)),
+            },
+            e => Err(Error::BadReadBackType(e.clone())),
         }
     }
 
@@ -595,11 +612,87 @@ impl Norm {
                 self.read_back(base)?.into(),
                 self.read_back(step)?.into(),
             )),
+            Neutral::IndNat(tgt, mot, base, step) => Ok(Core::IndNat(
+                self.read_back_neutral(tgt)?.into(),
+                self.read_back(mot)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
             Neutral::App(neu, arg) => Ok(Core::App(
                 self.read_back_neutral(neu)?.into(),
                 self.read_back(arg)?.into(),
             )),
-            e => todo!("{:?}", e),
+            Neutral::Car(p) => Ok(Core::Car(self.read_back_neutral(p)?.into())),
+            Neutral::Cdr(p) => Ok(Core::Cdr(self.read_back_neutral(p)?.into())),
+            Neutral::Replace(tgt, mot, base) => Ok(Core::Replace(
+                self.read_back_neutral(tgt)?.into(),
+                self.read_back(mot)?.into(),
+                self.read_back(base)?.into(),
+            )),
+            Neutral::Trans1(ne, no) => Ok(Core::Trans(
+                self.read_back_neutral(ne)?.into(),
+                self.read_back(no)?.into(),
+            )),
+            Neutral::Trans2(no, ne) => Ok(Core::Trans(
+                self.read_back(no)?.into(),
+                self.read_back_neutral(ne)?.into(),
+            )),
+            Neutral::Trans12(ne1, ne2) => Ok(Core::Trans(
+                self.read_back_neutral(ne1)?.into(),
+                self.read_back_neutral(ne2)?.into(),
+            )),
+            Neutral::Cong(ne, fun) => {
+                todo!()
+            }
+            // readBackNeutral (NCong ne fun@(NThe (VPi _ a (Closure e c)) _)) =
+            //   do b <- withEnv e (eval c)
+            //      CCong <$> readBackNeutral ne <*> readBackType b <*> readBack fun
+            Neutral::Symm(ne) => Ok(Core::Symm(self.read_back_neutral(ne)?.into())),
+            Neutral::IndEq(tgt, mot, base) => Ok(Core::IndEq(
+                self.read_back_neutral(tgt)?.into(),
+                self.read_back(mot)?.into(),
+                self.read_back(base)?.into(),
+            )),
+            Neutral::RecList(ne, base @ Normal::The(bt, _), step) => Ok(Core::RecList(
+                self.read_back_neutral(ne)?.into(),
+                self.read_back_type(bt)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
+            Neutral::IndList(tgt, mot, base, step) => Ok(Core::IndList(
+                self.read_back_neutral(tgt)?.into(),
+                self.read_back(mot)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
+            Neutral::Head(ne) => Ok(Core::VecHead(self.read_back_neutral(ne)?.into())),
+            Neutral::Tail(ne) => Ok(Core::VecTail(self.read_back_neutral(ne)?.into())),
+            Neutral::IndVec12(ne_len, ne_es, mot, base, step) => Ok(Core::IndVec(
+                self.read_back_neutral(ne_len)?.into(),
+                self.read_back_neutral(ne_es)?.into(),
+                self.read_back(mot)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
+            Neutral::IndVec2(len, ne_es, mot, base, step) => Ok(Core::IndVec(
+                self.read_back(len)?.into(),
+                self.read_back_neutral(ne_es)?.into(),
+                self.read_back(mot)?.into(),
+                self.read_back(base)?.into(),
+                self.read_back(step)?.into(),
+            )),
+            Neutral::IndEither(ne, mot, l, r) => Ok(Core::IndEither(
+                self.read_back_neutral(ne)?.into(),
+                self.read_back(mot)?.into(),
+                self.read_back(l)?.into(),
+                self.read_back(r)?.into(),
+            )),
+            Neutral::IndAbsurd(ne, mot) => Ok(Core::IndAbsurd(
+                Core::The(Core::Absurd.into(), self.read_back_neutral(ne)?.into()).into(),
+                self.read_back(mot)?.into(),
+            )),
+            Neutral::Todo(loc, ty) => Ok(Core::Todo(loc.clone(), self.read_back_type(ty)?.into())),
+            e => Err(Error::BadReadBackNeutral(e.clone())),
         }
     }
 }
@@ -679,6 +772,34 @@ mod tests {
             .into(),
         );
         assert_eq!(expected_core, actual_core);
+    }
+
+    #[test]
+    fn test_synth_nat_lit() {
+        let input = "5";
+        let input_expr = parse_expr(SOURCE, input).unwrap();
+        let Synth {
+            the_type: actual_ty,
+            the_expr: actual_core,
+        } = elab().synth(&input_expr).unwrap();
+        let expected_ty = Value::Nat;
+        assert_eq!(expected_ty, actual_ty);
+        let expected_core = Core::Add1(
+            Core::Add1(Core::Add1(Core::Add1(Core::Add1(Core::Zero.into()).into()).into()).into())
+                .into(),
+        );
+        assert_eq!(expected_core, actual_core);
+    }
+
+    #[test]
+    fn test_synth_ind_nat() {
+        let input =
+            "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))";
+        let input_expr = parse_expr(SOURCE, input).unwrap();
+        let Synth {
+            the_type: actual_ty,
+            the_expr: actual_core,
+        } = elab().synth(&input_expr).unwrap();
     }
 
     #[test]
@@ -773,7 +894,6 @@ mod tests {
                 "(rec-Nat zero (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
                 "(the (List Nat) nil)",
             ),
-            */
             (
                 "(rec-Nat 3 (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
                 "(the (List Nat) (:: 2 (:: 1 (:: 0 nil))))",
@@ -786,11 +906,12 @@ mod tests {
                 "(ind-Nat zero (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 0) vecnil)"
             ),
-            /*
+            */
             (
                 "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 2) (vec:: 1 (vec:: 0 vecnil)))"
             ),
+            /*
             (
                 "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))",
                 "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))"
