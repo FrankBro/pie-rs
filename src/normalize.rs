@@ -803,6 +803,17 @@ mod tests {
     }
 
     #[test]
+    fn test_synth_recurse() {
+        let input = "(which-Nat 5 't (lambda (x) 'nil))";
+        let input_expr = parse_expr(SOURCE, input).unwrap();
+        let Synth {
+            the_type: actual_ty,
+            the_expr: actual_core,
+        } = elab().synth(&input_expr).unwrap();
+        let actual_value = norm().eval(&actual_core).unwrap();
+    }
+
+    #[test]
     fn test_synth_lambda() {
         let input = "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same x)))";
         let input_expr = parse_expr(SOURCE, input).unwrap();
@@ -855,7 +866,6 @@ mod tests {
     #[test]
     fn test_norm() {
         let cases = &[
-            /*
             ("(the Trivial sole)", "sole"),
             ("4", "(add1 (add1 (add1 (add1 zero))))"),
             (
@@ -906,7 +916,6 @@ mod tests {
                 "(ind-Nat zero (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 0) vecnil)"
             ),
-            */
             (
                 "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 2) (vec:: 1 (vec:: 0 vecnil)))"
