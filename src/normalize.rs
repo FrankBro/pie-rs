@@ -70,7 +70,19 @@ impl Norm {
             Core::Tick(x) => Ok(Value::Tick(x.clone())),
             Core::Atom => Ok(Value::Atom),
             Core::Zero => Ok(Value::Zero),
-            Core::Add1(n) => Ok(Value::Add1(Box::new(self.eval(n)?))),
+            Core::Add1(n) => {
+                let mut count = 1;
+                let mut curr = n.clone();
+                while let Core::Add1(next) = *curr {
+                    count += 1;
+                    curr = next;
+                }
+                let mut acc = self.eval(&curr)?;
+                for _ in 0..count {
+                    acc = Value::Add1(acc.into());
+                }
+                Ok(acc)
+            }
             Core::WhichNat(tgt, ty, base, step) => {
                 let tgtv = self.eval(tgt)?;
                 let tyv = self.eval(ty)?;
