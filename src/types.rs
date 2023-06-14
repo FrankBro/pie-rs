@@ -374,7 +374,7 @@ pub enum Normal {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Closure<T> {
     pub env: Env<T>,
-    pub expr: Core,
+    pub expr: Box<Core>,
 }
 
 pub type Env<T> = Vec<(Symbol, T)>;

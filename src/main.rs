@@ -1,10 +1,12 @@
+use std::mem::size_of;
+
 use elab::Synth;
 use normalize::Norm;
 
 use crate::{
     elab::Elab,
     parse::parse_expr,
-    types::{Loc, Pos},
+    types::{Closure, Core, Loc, Pos, Value},
 };
 
 mod alpha_equiv;
@@ -41,12 +43,16 @@ fn main() {
     dbg!(synth);
     println!("Hello, world!");
     */
-    let input = "(which-Nat 22 't (lambda (x) 'nil))";
+    let input = "(which-Nat 40 't (lambda (x) 'nil))";
     let input_expr = parse_expr(SOURCE, input).unwrap();
     let Synth {
         the_type: actual_ty,
         the_expr: actual_core,
     } = elab().synth(&input_expr).unwrap();
+    println!("Closure {}", size_of::<Closure<Value>>());
+    println!("Core {}", size_of::<Core>());
+    println!("Value {}", size_of::<Value>());
+    println!("Box value {}", size_of::<Box<Value>>());
     let actual_value = norm().eval(&actual_core).unwrap();
     dbg!(actual_value);
 }

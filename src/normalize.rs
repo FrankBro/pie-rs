@@ -48,6 +48,7 @@ impl Norm {
 
     fn close(&self, expr: Core) -> Closure<Value> {
         let env = self.env.clone();
+        let expr = expr.into();
         Closure { env, expr }
     }
 
@@ -379,7 +380,7 @@ impl Norm {
                         Box::new(Value::Nat),
                         Closure {
                             env: Vec::new(),
-                            expr: Core::U,
+                            expr: Core::U.into(),
                         },
                     );
                     let base_ty = self.apply(mot.clone(), Value::Zero)?;
@@ -744,13 +745,13 @@ mod tests {
                 Value::Nat.into(),
                 Closure {
                     env: Vec::new(),
-                    expr: Core::Nat,
+                    expr: Core::Nat.into(),
                 },
             )
             .into(),
             Closure {
                 env: Vec::new(),
-                expr: Core::Pi("x₁".into(), Core::Nat.into(), Core::Nat.into()),
+                expr: Core::Pi("x₁".into(), Core::Nat.into(), Core::Nat.into()).into(),
             },
         );
         assert_eq!(expected_ty, actual_ty);
@@ -834,7 +835,8 @@ mod tests {
                         Box::new(Core::Var("x".into())),
                         Box::new(Core::Var("y".into())),
                     )),
-                ),
+                )
+                .into(),
             },
         );
         assert_eq!(expected_ty, actual_ty);

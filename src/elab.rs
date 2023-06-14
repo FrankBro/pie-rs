@@ -477,7 +477,7 @@ impl Elab {
                         Value::Nat.into(),
                         Closure {
                             env: Vec::new(),
-                            expr: Core::U,
+                            expr: Core::U.into(),
                         },
                     ),
                     mot,
