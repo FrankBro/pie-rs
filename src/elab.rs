@@ -193,8 +193,22 @@ impl Elab {
     fn is_type_at(&mut self, expr: &ExprAt<Loc>) -> Result<Core> {
         match expr {
             ExprAt::Atom => Ok(Core::Atom),
-            ExprAt::Sigma(_, _) => {
-                todo!()
+            ExprAt::Sigma(as1, d) => {
+                let mut elab = self.clone();
+                let mut checked_as = Vec::with_capacity(as1.len());
+                for (loc, x, a) in as1 {
+                    let a = elab.is_type(a)?;
+                    let a_v = elab.eval(&a)?;
+                    let fresh_x = elab.fresh(x.clone());
+                    elab = elab.with_context(fresh_x.clone(), Some(loc.clone()), a_v, Ok)?;
+                    elab.rename(x.clone(), fresh_x);
+                    checked_as.push((x, a));
+                }
+                let mut acc = elab.is_type(d)?;
+                for (x, a) in checked_as.into_iter().rev() {
+                    acc = Core::Sigma(x.clone(), a.into(), acc.into());
+                }
+                Ok(acc)
             }
             ExprAt::Pair(a, d) => {
                 let x = self.fresh("x".into());

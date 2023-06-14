@@ -934,15 +934,15 @@ mod tests {
                 "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
                 "(the (Vec Nat 2) (vec:: 1 (vec:: 0 vecnil)))"
             ),
-            /*
             (
                 "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))",
                 "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))"
             ),
             (
-                "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetøj)) Atom) (lambda (p) (car p)))",
-                "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetøj)) Atom) (lambda (p) (car p)))"
+                "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))",
+                "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))"
             ),
+            /*
             ("(car (the (Pair Nat Nat) (cons 2 3)))", "2"),
             ("(cdr (the (Pair Nat Nat) (cons 2 3)))", "3"),
             (
