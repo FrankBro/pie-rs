@@ -59,7 +59,7 @@ impl Norm {
     }
 
     fn var(&self, x: &Symbol) -> Result<Value> {
-        match self.env.iter().find(|(y, v)| x == y) {
+        match self.env.iter().find(|(y, _v)| x == y) {
             Some((_, v)) => Ok(v.clone()),
             None => Err(Error::VarNotFound(x.clone())),
         }

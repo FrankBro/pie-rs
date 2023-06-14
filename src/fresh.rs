@@ -59,19 +59,11 @@ fn unsplit_name(arg: (&str, u64)) -> Symbol {
 }
 
 fn as_non_subscript(digits: &str) -> String {
-    digits
-        .chars()
-        .into_iter()
-        .map(|c| swap_if(c, true))
-        .collect()
+    digits.chars().map(|c| swap_if(c, true)).collect()
 }
 
 fn as_subscript(digits: &str) -> String {
-    digits
-        .chars()
-        .into_iter()
-        .map(|c| swap_if(c, false))
-        .collect()
+    digits.chars().map(|c| swap_if(c, false)).collect()
 }
 
 fn swap_if(c: char, as_non_subscript: bool) -> char {

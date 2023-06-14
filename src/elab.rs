@@ -326,7 +326,7 @@ impl Elab {
                     the_expr: pr,
                 } = self.synth(pr)?;
                 match ty {
-                    Value::Sigma(x, a_t, d_t) => Ok(Synth {
+                    Value::Sigma(_x, a_t, _d_t) => Ok(Synth {
                         the_type: *a_t,
                         the_expr: Core::Car(pr.into()),
                     }),
@@ -342,7 +342,7 @@ impl Elab {
                     the_expr: pr,
                 } = self.synth(pr)?;
                 match ty {
-                    Value::Sigma(x, a_t, d_t) => {
+                    Value::Sigma(x, _a_t, d_t) => {
                         let a = self.eval(&pr).and_then(|v| self.car(v))?;
                         let d_v = self.instantiate(d_t, x, a)?;
                         Ok(Synth {
