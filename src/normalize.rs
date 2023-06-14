@@ -439,7 +439,36 @@ impl Norm {
     }
 
     fn replace(&self, tgt: Value, mot: Value, base: Value) -> Result<Value> {
-        todo!()
+        match tgt {
+            Value::Same(_) => Ok(base),
+            Value::Neu(eq, ne) => match *eq {
+                Value::Eq(a, from, to) => {
+                    let ty = self.apply(mot.clone(), *to)?;
+                    let base_t = self.apply(mot.clone(), *from)?;
+                    Ok(Value::Neu(
+                        ty.into(),
+                        Neutral::Replace(
+                            ne.into(),
+                            Normal::The(
+                                Value::Pi(
+                                    "x".into(),
+                                    a,
+                                    Closure {
+                                        env: Vec::new(),
+                                        expr: Core::U.into(),
+                                    },
+                                ),
+                                mot,
+                            ),
+                            Normal::The(base_t, base),
+                        )
+                        .into(),
+                    ))
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn trans(&self, tgt1: Value, tgt2: Value) -> Result<Value> {
@@ -451,7 +480,17 @@ impl Norm {
     }
 
     fn symm(&self, p: Value) -> Result<Value> {
-        todo!()
+        match p {
+            Value::Same(v) => Ok(Value::Same(v)),
+            Value::Neu(eq, ne) => match *eq {
+                Value::Eq(t, from, to) => Ok(Value::Neu(
+                    Value::Eq(t, to, from).into(),
+                    Neutral::Symm(ne).into(),
+                )),
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn ind_eq(&self, tgt: Value, mot: Value, base: Value) -> Result<Value> {
@@ -942,12 +981,11 @@ mod tests {
                 "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))",
                 "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))"
             ),
-            /*
             ("(car (the (Pair Nat Nat) (cons 2 3)))", "2"),
             ("(cdr (the (Pair Nat Nat) (cons 2 3)))", "3"),
             (
-                "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetøj)))) (= Atom (car p) 'syltetøj)) (lambda (p) (cdr p)))",
-                "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetøj)))) (= Atom (car p) 'syltetøj)) (lambda (p) (cdr p)))"
+                "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetoj)))) (= Atom (car p) 'syltetoj)) (lambda (p) (cdr p)))",
+                "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetoj)))) (= Atom (car p) 'syltetoj)) (lambda (p) (cdr p)))"
             ),
             (
                 "(the (-> (Pair Trivial Nat) (Pair Trivial Nat)) (lambda (x) x))",
@@ -967,6 +1005,7 @@ mod tests {
                 "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))",
                 "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))"
             ),
+            /*
             (
                 "((the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n)))) 0 0 (same 0))",
                 "(the (= Nat 0 0) (same 0))"

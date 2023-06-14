@@ -30,6 +30,8 @@ pub enum Error {
     CarNotSigma(Core),
     CdrNotSigma(Core),
     CantSynth(ExprAt<Loc>),
+    SynthSymmNotEqType(Core),
+    SynthReplaceNotEqType(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -545,9 +547,50 @@ impl Elab {
             ExprAt::VecHead(_) => todo!(),
             ExprAt::VecTail(_) => todo!(),
             ExprAt::IndVec(_, _, _, _, _) => todo!(),
-            ExprAt::Replace(_, _, _) => todo!(),
+            ExprAt::Replace(tgt, mot, base) => {
+                let Synth {
+                    the_type: tgt_t,
+                    the_expr: tgt,
+                } = self.synth(tgt)?;
+                match tgt_t {
+                    Value::Eq(a, from, to) => {
+                        let mot_t = self.eval_in_env(
+                            vec![("A".into(), *a.clone())],
+                            Core::Pi("x".into(), Core::Var("A".into()).into(), Core::U.into()),
+                        )?;
+                        let mot = self.check(&mot_t, mot)?;
+                        let mot_v = self.eval(&mot)?;
+                        let base_t = self.apply(mot_v.clone(), *from)?;
+                        let base = self.check(&base_t, base)?;
+                        let ty = self.apply(mot_v, *to)?;
+                        Ok(Synth {
+                            the_type: ty,
+                            the_expr: Core::Replace(tgt.into(), mot.into(), base.into()),
+                        })
+                    }
+                    _ => {
+                        let t = self.read_back_type(&tgt_t)?;
+                        Err(Error::SynthReplaceNotEqType(t))
+                    }
+                }
+            }
             ExprAt::Cong(_, _) => todo!(),
-            ExprAt::Symm(_) => todo!(),
+            ExprAt::Symm(tgt) => {
+                let Synth {
+                    the_type: tgt_t,
+                    the_expr: tgt,
+                } = self.synth(tgt)?;
+                match tgt_t {
+                    Value::Eq(a, from, to) => Ok(Synth {
+                        the_type: Value::Eq(a, to, from),
+                        the_expr: Core::Symm(tgt.into()),
+                    }),
+                    _ => {
+                        let t = self.read_back_type(&tgt_t)?;
+                        Err(Error::SynthSymmNotEqType(t))
+                    }
+                }
+            }
             ExprAt::Trans(_, _) => todo!(),
             ExprAt::IndEq(_, _, _) => todo!(),
             ExprAt::IndEither(_, _, _, _) => todo!(),
@@ -576,7 +619,16 @@ impl Elab {
                     self.check(&Value::Nat, len)?.into(),
                 ),
             }),
-            ExprAt::Eq(_, _, _) => todo!(),
+            ExprAt::Eq(ty, from, to) => {
+                let ty = self.check(&Value::U, ty)?;
+                let tv = self.eval(&ty)?;
+                let from = self.check(&tv, from)?;
+                let to = self.check(&tv, to)?;
+                Ok(Synth {
+                    the_type: Value::U,
+                    the_expr: Core::Eq(ty.into(), from.into(), to.into()),
+                })
+            }
             ExprAt::Either(_, _) => todo!(),
             ExprAt::Trivial => Ok(Synth {
                 the_type: Value::U,
