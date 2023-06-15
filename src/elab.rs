@@ -32,6 +32,8 @@ pub enum Error {
     CantSynth(ExprAt<Loc>),
     SynthSymmNotEqType(Core),
     SynthReplaceNotEqType(Core),
+    SynthTransLeftNotEqType(Core),
+    SynthTransRightNotEqType(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -591,7 +593,38 @@ impl Elab {
                     }
                 }
             }
-            ExprAt::Trans(_, _) => todo!(),
+            ExprAt::Trans(p1, p2) => {
+                let Synth {
+                    the_type: t1,
+                    the_expr: p1,
+                } = self.synth(p1)?;
+                let Synth {
+                    the_type: t2,
+                    the_expr: p2,
+                } = self.synth(p2)?;
+                match (t1, t2) {
+                    (Value::Eq(a, from, mid_l), Value::Eq(b, mid_r, to)) => {
+                        self.same_type(&a, &b)?;
+                        self.same(&a, &mid_l, &mid_r)?;
+                        Ok(Synth {
+                            the_type: Value::Eq(a, from, to),
+                            the_expr: Core::Trans(p1.into(), p2.into()),
+                        })
+                    }
+                    (Value::Eq(_, _, _), t2) => {
+                        let not_eq = self.read_back_type(&t2)?;
+                        Err(Error::SynthTransRightNotEqType(not_eq))
+                    }
+                    (t1, Value::Eq(_, _, _)) => {
+                        let not_eq = self.read_back_type(&t1)?;
+                        Err(Error::SynthTransLeftNotEqType(not_eq))
+                    }
+                    (t1, _) => {
+                        let not_eq = self.read_back_type(&t1)?;
+                        Err(Error::SynthTransLeftNotEqType(not_eq))
+                    }
+                }
+            }
             ExprAt::IndEq(_, _, _) => todo!(),
             ExprAt::IndEither(_, _, _, _) => todo!(),
             ExprAt::Sole => Ok(Synth {

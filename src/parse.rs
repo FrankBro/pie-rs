@@ -42,7 +42,6 @@ fn lex_nat_lit(lex: &mut Lexer<Token>) -> Option<u64> {
 }
 
 #[derive(Logos, Debug, PartialEq)]
-// #[logos(subpattern constituent = r"\p{Letter}")]
 #[logos(subpattern constituent = r"[a-zA-Z]")]
 #[logos(subpattern special_init = r"[!$%&*/:<=>?^_~]")]
 #[logos(subpattern init = r"((?&constituent)|(?&special_init))")]

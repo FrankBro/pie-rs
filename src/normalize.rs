@@ -472,7 +472,39 @@ impl Norm {
     }
 
     fn trans(&self, tgt1: Value, tgt2: Value) -> Result<Value> {
-        todo!()
+        match (tgt1, tgt2) {
+            (Value::Same(v), Value::Same(_)) => Ok(Value::Same(v)),
+            (Value::Same(from), Value::Neu(v, ne)) => match *v {
+                Value::Eq(t, _, to) => Ok(Value::Neu(
+                    Value::Eq(t.clone(), from.clone(), to).into(),
+                    Neutral::Trans2(
+                        Normal::The(Value::Eq(t, from.clone(), from.clone()), Value::Same(from)),
+                        ne,
+                    )
+                    .into(),
+                )),
+                _ => unreachable!(),
+            },
+            (Value::Neu(v, ne), Value::Same(to)) => match *v {
+                Value::Eq(t, from, _) => Ok(Value::Neu(
+                    Value::Eq(t.clone(), from, to.clone()).into(),
+                    Neutral::Trans1(
+                        ne,
+                        Normal::The(Value::Eq(t, to.clone(), to.clone()), Value::Same(to)),
+                    )
+                    .into(),
+                )),
+                _ => unreachable!(),
+            },
+            (Value::Neu(v1, ne1), Value::Neu(v2, ne2)) => match (*v1, *v2) {
+                (Value::Eq(t, from, _), Value::Eq(_, _, to)) => Ok(Value::Neu(
+                    Value::Eq(t, from, to).into(),
+                    Neutral::Trans12(ne1, ne2).into(),
+                )),
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn cong(&self, e1: Value, e2: Value, e3: Value) -> Result<Value> {
@@ -1005,7 +1037,6 @@ mod tests {
                 "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))",
                 "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))"
             ),
-            /*
             (
                 "((the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n)))) 0 0 (same 0))",
                 "(the (= Nat 0 0) (same 0))"
@@ -1026,6 +1057,7 @@ mod tests {
                 "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))",
                 "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))"
             ),
+            /*
             (
                 "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))",
                 "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))"
