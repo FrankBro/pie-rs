@@ -507,8 +507,28 @@ impl Norm {
         }
     }
 
-    fn cong(&self, e1: Value, e2: Value, e3: Value) -> Result<Value> {
-        todo!()
+    fn cong(&self, e1: Value, ret: Value, fun: Value) -> Result<Value> {
+        match e1 {
+            Value::Same(v) => Ok(Value::Same(self.apply(fun, *v)?.into())),
+            Value::Neu(v, ne) => match *v {
+                Value::Eq(t, from, to) => {
+                    let from = self.apply(fun.clone(), *from)?;
+                    let to = self.apply(fun.clone(), *to)?;
+                    let x = self.fresh("x");
+                    let a = self.fresh("A");
+                    let b = self.fresh("B");
+                    let fun_ty = self
+                        .with_env(vec![(a.clone(), *t), (b.clone(), ret.clone())])
+                        .eval(&Core::Pi(x, Core::Var(a).into(), Core::Var(b).into()))?;
+                    Ok(Value::Neu(
+                        Value::Eq(ret.into(), from.into(), to.into()).into(),
+                        Neutral::Cong(ne, Normal::The(fun_ty, fun)).into(),
+                    ))
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn symm(&self, p: Value) -> Result<Value> {
@@ -725,12 +745,17 @@ impl Norm {
                 self.read_back_neutral(ne1)?.into(),
                 self.read_back_neutral(ne2)?.into(),
             )),
-            Neutral::Cong(ne, fun) => {
-                todo!()
+            Neutral::Cong(
+                ne,
+                fun @ Normal::The(Value::Pi(_, a, Closure { env: e, expr: c }), _),
+            ) => {
+                let b = self.with_env(e.clone()).eval(c)?;
+                Ok(Core::Cong(
+                    self.read_back_neutral(ne)?.into(),
+                    self.read_back_type(&b)?.into(),
+                    self.read_back(fun)?.into(),
+                ))
             }
-            // readBackNeutral (NCong ne fun@(NThe (VPi _ a (Closure e c)) _)) =
-            //   do b <- withEnv e (eval c)
-            //      CCong <$> readBackNeutral ne <*> readBackType b <*> readBack fun
             Neutral::Symm(ne) => Ok(Core::Symm(self.read_back_neutral(ne)?.into())),
             Neutral::IndEq(tgt, mot, base) => Ok(Core::IndEq(
                 self.read_back_neutral(tgt)?.into(),
@@ -1057,11 +1082,11 @@ mod tests {
                 "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))",
                 "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))"
             ),
-            /*
             (
                 "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))",
                 "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))"
             ),
+            /*
             ("(rec-List (the (List Atom) nil) 0 (lambda (_ _ l) (add1 l)))" , "(the Nat 0)"),
             ("(rec-List (the (List Atom) (:: 'a (:: 'b nil))) 0 (lambda (_ _ l) (add1 l)))" , "(the Nat 2)"),
             (

@@ -34,6 +34,8 @@ pub enum Error {
     SynthReplaceNotEqType(Core),
     SynthTransLeftNotEqType(Core),
     SynthTransRightNotEqType(Core),
+    SynthCongNotArrowType(Core),
+    SynthCongNotEqType(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -576,7 +578,38 @@ impl Elab {
                     }
                 }
             }
-            ExprAt::Cong(_, _) => todo!(),
+            ExprAt::Cong(tgt, fun) => {
+                let Synth {
+                    the_type: tgt_t,
+                    the_expr: tgt,
+                } = self.synth(tgt)?;
+                let Synth {
+                    the_type: fun_t,
+                    the_expr: fun,
+                } = self.synth(fun)?;
+                match (tgt_t, fun_t) {
+                    (Value::Eq(ty, from, to), Value::Pi(x, dom, ran)) => {
+                        self.same_type(&ty, &dom)?;
+                        let ran = self.instantiate(ran, x, *from.clone())?;
+                        let fun_v = self.eval(&fun)?;
+                        let new_from = self.apply(fun_v.clone(), *from)?;
+                        let new_to = self.apply(fun_v, *to)?;
+                        let ty = self.read_back_type(&ran)?;
+                        Ok(Synth {
+                            the_type: Value::Eq(ran.into(), new_from.into(), new_to.into()),
+                            the_expr: Core::Cong(tgt.into(), ty.into(), fun.into()),
+                        })
+                    }
+                    (Value::Eq(_, _, _), other) => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthCongNotArrowType(t))
+                    }
+                    (other, _) => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthCongNotEqType(t))
+                    }
+                }
+            }
             ExprAt::Symm(tgt) => {
                 let Synth {
                     the_type: tgt_t,
