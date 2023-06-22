@@ -253,6 +253,14 @@ impl Norm {
         }
     }
 
+    fn apply_many(&self, fun: Value, vs: Vec<Value>) -> Result<Value> {
+        let mut fun = fun;
+        for v in vs {
+            fun = self.apply(fun, v)?;
+        }
+        Ok(fun)
+    }
+
     pub fn car(&self, v: &Value) -> Result<Value> {
         match v {
             Value::Cons(a, _) => Ok(*a.clone()),
@@ -431,7 +439,41 @@ impl Norm {
     }
 
     fn rec_list(&self, tgt: Value, bt: Value, base: Value, step: Value) -> Result<Value> {
-        todo!()
+        match tgt {
+            Value::ListNil => Ok(base),
+            Value::ListCons(v, vs) => {
+                let so_far = self.rec_list(*vs.clone(), bt, base, step.clone())?;
+                self.apply_many(step, vec![*v, *vs, so_far])
+            }
+            Value::Neu(n, ne) => match *n {
+                Value::List(t) => {
+                    let step_t = self
+                        .with_env(vec![("E".into(), *t), ("bt".into(), bt.clone())])
+                        .eval(&Core::Pi(
+                            "e".into(),
+                            Core::Var("E".into()).into(),
+                            Core::Pi(
+                                "es".into(),
+                                Core::List(Core::Var("E".into()).into()).into(),
+                                Core::Pi(
+                                    "so-far".into(),
+                                    Core::Var("bt".into()).into(),
+                                    Core::Var("bt".into()).into(),
+                                )
+                                .into(),
+                            )
+                            .into(),
+                        ))?;
+                    Ok(Value::Neu(
+                        bt.clone().into(),
+                        Neutral::RecList(ne, Normal::The(bt, base), Normal::The(step_t, step))
+                            .into(),
+                    ))
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn ind_list(&self, tgt: Value, mot: Value, base: Value, step: Value) -> Result<Value> {
@@ -1086,13 +1128,13 @@ mod tests {
                 "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))",
                 "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))"
             ),
-            /*
             ("(rec-List (the (List Atom) nil) 0 (lambda (_ _ l) (add1 l)))" , "(the Nat 0)"),
             ("(rec-List (the (List Atom) (:: 'a (:: 'b nil))) 0 (lambda (_ _ l) (add1 l)))" , "(the Nat 2)"),
             (
                 "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))",
                 "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))"
             ),
+            /*
             (
                 "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))",
                 "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))"

@@ -36,6 +36,7 @@ pub enum Error {
     SynthTransRightNotEqType(Core),
     SynthCongNotArrowType(Core),
     SynthCongNotEqType(Core),
+    SynthRecListNotListType(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -542,8 +543,52 @@ impl Elab {
                     the_expr: Core::ListCons(e.into(), es.into()),
                 })
             }
-            ExprAt::RecList(_, _, _) => {
-                todo!()
+            ExprAt::RecList(tgt, base, step) => {
+                let Synth {
+                    the_type: lst_t,
+                    the_expr: tgt,
+                } = self.synth(tgt)?;
+                match lst_t {
+                    Value::List(et) => {
+                        let Synth {
+                            the_type: bt_v,
+                            the_expr: base,
+                        } = self.synth(base)?;
+                        let step_t = self.eval_in_env(
+                            vec![("E".into(), *et), ("base-type".into(), bt_v.clone())],
+                            Core::Pi(
+                                "e".into(),
+                                Core::Var("E".into()).into(),
+                                Core::Pi(
+                                    "es".into(),
+                                    Core::List(Core::Var("E".into()).into()).into(),
+                                    Core::Pi(
+                                        "almost".into(),
+                                        Core::Var("base-type".into()).into(),
+                                        Core::Var("base-type".into()).into(),
+                                    )
+                                    .into(),
+                                )
+                                .into(),
+                            ),
+                        )?;
+                        let step = self.check(&step_t, step)?;
+                        let bt = self.read_back_type(&bt_v)?;
+                        Ok(Synth {
+                            the_type: bt_v,
+                            the_expr: Core::RecList(
+                                tgt.into(),
+                                bt.into(),
+                                base.into(),
+                                step.into(),
+                            ),
+                        })
+                    }
+                    other => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthRecListNotListType(t))
+                    }
+                }
             }
             ExprAt::IndList(_, _, _, _) => {
                 todo!()
