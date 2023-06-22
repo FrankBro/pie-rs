@@ -295,8 +295,7 @@ impl Norm {
                 Value::Nat => {
                     let ty_name = self.fresh("ty");
                     let k = self.fresh("k");
-                    let core =
-                        Core::Pi(k, Box::new(Core::Nat), Box::new(Core::Var(ty_name.clone())));
+                    let core = Core::pi(k, Core::Nat, Core::Var(ty_name.clone()));
                     let step_ty = self.with_env(vec![(ty_name, t.clone())]).eval(&core)?;
                     Ok(Value::Neu(
                         Box::new(t.clone()),
@@ -324,11 +323,7 @@ impl Norm {
                 Value::Nat => {
                     let ty_name = self.fresh("ty");
                     let k = self.fresh("k");
-                    let core = Core::Pi(
-                        k,
-                        Box::new(Core::Var(ty_name.clone())),
-                        Box::new(Core::Var(ty_name.clone())),
-                    );
+                    let core = Core::pi(k, Core::Var(ty_name.clone()), Core::Var(ty_name.clone()));
                     let step_ty = self.with_env(vec![(ty_name, t.clone())]).eval(&core)?;
                     Ok(Value::Neu(
                         Box::new(t.clone()),
@@ -358,14 +353,10 @@ impl Norm {
                     let ty_name = self.fresh("ty");
                     let k = self.fresh("k");
                     let x = self.fresh("x");
-                    let core = Core::Pi(
+                    let core = Core::pi(
                         k,
-                        Box::new(Core::Nat),
-                        Box::new(Core::Pi(
-                            x,
-                            Box::new(Core::Var(ty_name.clone())),
-                            Box::new(Core::Var(ty_name.clone())),
-                        )),
+                        Core::Nat,
+                        Core::pi(x, Core::Var(ty_name.clone()), Core::Var(ty_name.clone())),
                     );
                     let step_ty = self.with_env(vec![(ty_name, t.clone())]).eval(&core)?;
                     Ok(Value::Neu(
@@ -406,20 +397,20 @@ impl Norm {
                     let base_ty = self.apply(mot.clone(), Value::Zero)?;
                     let so_far = self.fresh("so-far");
                     let mot_name = self.fresh("mot");
-                    let core = Core::Pi(
+                    let core = Core::pi(
                         k.clone(),
-                        Box::new(Core::Nat),
-                        Box::new(Core::Pi(
+                        Core::Nat,
+                        Core::pi(
                             so_far,
-                            Box::new(Core::App(
+                            Core::App(
                                 Box::new(Core::Var(mot_name.clone())),
                                 Box::new(Core::Var(k.clone())),
-                            )),
-                            Box::new(Core::App(
+                            ),
+                            Core::App(
                                 Box::new(Core::Var(mot_name.clone())),
                                 Box::new(Core::Add1(Box::new(Core::Var(k)))),
-                            )),
-                        )),
+                            ),
+                        ),
                     );
                     let step_ty = self.with_env(vec![(mot_name, mot.clone())]).eval(&core)?;
                     Ok(Value::Neu(
@@ -449,20 +440,14 @@ impl Norm {
                 Value::List(t) => {
                     let step_t = self
                         .with_env(vec![("E".into(), *t), ("bt".into(), bt.clone())])
-                        .eval(&Core::Pi(
-                            "e".into(),
-                            Core::var("E").into(),
-                            Core::Pi(
-                                "es".into(),
-                                Core::List(Core::var("E").into()).into(),
-                                Core::Pi(
-                                    "so-far".into(),
-                                    Core::var("bt").into(),
-                                    Core::var("bt").into(),
-                                )
-                                .into(),
-                            )
-                            .into(),
+                        .eval(&Core::pi(
+                            "e",
+                            Core::var("E"),
+                            Core::pi(
+                                "es",
+                                Core::List(Core::var("E").into()),
+                                Core::pi("so-far", Core::var("bt"), Core::var("bt")),
+                            ),
                         ))?;
                     Ok(Value::Neu(
                         bt.clone().into(),
@@ -611,33 +596,31 @@ impl Norm {
                 Value::Either(l, r) => {
                     let mot_t = self
                         .with_env(vec![("L".into(), *l.clone()), ("R".into(), *r.clone())])
-                        .eval(&Core::Pi(
-                            "e".into(),
-                            Core::Either(Core::var("L").into(), Core::var("R").into()).into(),
-                            Core::U.into(),
+                        .eval(&Core::pi(
+                            "e",
+                            Core::Either(Core::var("L").into(), Core::var("R").into()),
+                            Core::U,
                         ))?;
                     let left_t = self
                         .with_env(vec![("L".into(), *l), ("mot".into(), mot.clone())])
-                        .eval(&Core::Pi(
-                            "l".into(),
-                            Core::var("L").into(),
+                        .eval(&Core::pi(
+                            "l",
+                            Core::var("L"),
                             Core::App(
                                 Core::var("mot").into(),
                                 Core::Left(Core::var("l").into()).into(),
-                            )
-                            .into(),
+                            ),
                         ))?;
                     let right_t = self
                         .with_env(vec![("R".into(), *r), ("mot".into(), mot.clone())])
-                        .eval(&Core::Pi(
-                            "r".into(),
-                            Core::var("R").into(),
+                        .eval(&Core::pi(
+                            "r",
+                            Core::var("R"),
                             Core::App(
                                 Core::var("mot").into(),
                                 // TODO: Left twice??
                                 Core::Left(Core::var("r").into()).into(),
-                            )
-                            .into(),
+                            ),
                         ))?;
                     let ty = self.apply(mot.clone(), tgt)?;
                     Ok(Value::Neu(
@@ -741,10 +724,10 @@ impl Norm {
                     Value::Neu(dom.clone(), Box::new(Neutral::Var(y.clone()))),
                 )?;
                 self.in_bound(y.clone());
-                Ok(Core::Pi(
+                Ok(Core::pi(
                     y,
-                    Box::new(self.read_back_type(dom)?),
-                    Box::new(self.read_back_type(&ran_v)?),
+                    self.read_back_type(dom)?,
+                    self.read_back_type(&ran_v)?,
                 ))
             }
             Value::Sigma(x, a, d) => {
@@ -951,15 +934,15 @@ mod tests {
             .into(),
             Closure {
                 env: Vec::new(),
-                expr: Core::Pi("x₁".into(), Core::Nat.into(), Core::Nat.into()).into(),
+                expr: Core::pi("x₁", Core::Nat, Core::Nat).into(),
             },
         );
         assert_eq!(expected_ty, actual_ty);
         let expected_core = Core::The(
-            Core::Pi(
-                "x".into(),
-                Core::Pi("x".into(), Core::Nat.into(), Core::Nat.into()).into(),
-                Core::Pi("x₁".into(), Core::Nat.into(), Core::Nat.into()).into(),
+            Core::pi(
+                "x",
+                Core::pi("x", Core::Nat, Core::Nat),
+                Core::pi("x₁", Core::Nat, Core::Nat),
             )
             .into(),
             Core::Lambda(
@@ -1027,32 +1010,32 @@ mod tests {
             Value::Trivial.into(),
             Closure {
                 env: Vec::new(),
-                expr: Core::Pi(
-                    "y".into(),
-                    Box::new(Core::Trivial),
-                    Box::new(Core::Eq(
+                expr: Core::pi(
+                    "y",
+                    Core::Trivial,
+                    Core::Eq(
                         Box::new(Core::Trivial),
                         Box::new(Core::var("x")),
                         Box::new(Core::var("y")),
-                    )),
+                    ),
                 )
                 .into(),
             },
         );
         assert_eq!(expected_ty, actual_ty);
         let expected_core = Core::The(
-            Box::new(Core::Pi(
-                "x".into(),
-                Box::new(Core::Trivial),
-                Box::new(Core::Pi(
-                    "y".into(),
-                    Box::new(Core::Trivial),
-                    Box::new(Core::Eq(
+            Box::new(Core::pi(
+                "x",
+                Core::Trivial,
+                Core::pi(
+                    "y",
+                    Core::Trivial,
+                    Core::Eq(
                         Box::new(Core::Trivial),
                         Box::new(Core::var("x")),
                         Box::new(Core::var("y")),
-                    )),
-                )),
+                    ),
+                ),
             )),
             Box::new(Core::Lambda(
                 "x".into(),

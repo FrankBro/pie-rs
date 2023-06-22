@@ -262,6 +262,10 @@ impl Core {
     pub fn var(name: &str) -> Core {
         Core::Var(name.into())
     }
+
+    pub fn pi<I: Into<Symbol>>(name: I, dom: Core, ran: Core) -> Core {
+        Core::Pi(name.into(), dom.into(), ran.into())
+    }
 }
 
 enum TopLevel<T> {
