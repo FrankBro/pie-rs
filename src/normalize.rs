@@ -603,8 +603,62 @@ impl Norm {
         todo!()
     }
 
-    fn ind_either(&self, tgt: Value, mot: Value, l: Value, r: Value) -> Result<Value> {
-        todo!()
+    fn ind_either(&self, tgt: Value, mot: Value, left: Value, right: Value) -> Result<Value> {
+        match tgt.clone() {
+            Value::Left(v) => self.apply(left, *v),
+            Value::Right(v) => self.apply(right, *v),
+            Value::Neu(n, ne) => match *n {
+                Value::Either(l, r) => {
+                    let mot_t = self
+                        .with_env(vec![("L".into(), *l.clone()), ("R".into(), *r.clone())])
+                        .eval(&Core::Pi(
+                            "e".into(),
+                            Core::Either(
+                                Core::Var("L".into()).into(),
+                                Core::Var("R".into()).into(),
+                            )
+                            .into(),
+                            Core::U.into(),
+                        ))?;
+                    let left_t = self
+                        .with_env(vec![("L".into(), *l), ("mot".into(), mot.clone())])
+                        .eval(&Core::Pi(
+                            "l".into(),
+                            Core::Var("L".into()).into(),
+                            Core::App(
+                                Core::Var("mot".into()).into(),
+                                Core::Left(Core::Var("l".into()).into()).into(),
+                            )
+                            .into(),
+                        ))?;
+                    let right_t = self
+                        .with_env(vec![("R".into(), *r), ("mot".into(), mot.clone())])
+                        .eval(&Core::Pi(
+                            "r".into(),
+                            Core::Var("R".into()).into(),
+                            Core::App(
+                                Core::Var("mot".into()).into(),
+                                // TODO: Left twice??
+                                Core::Left(Core::Var("r".into()).into()).into(),
+                            )
+                            .into(),
+                        ))?;
+                    let ty = self.apply(mot.clone(), tgt)?;
+                    Ok(Value::Neu(
+                        ty.into(),
+                        Neutral::IndEither(
+                            ne,
+                            Normal::The(mot_t, mot),
+                            Normal::The(left_t, left),
+                            Normal::The(right_t, right),
+                        )
+                        .into(),
+                    ))
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn ind_absurd(&self, tgt: Value, mot: Value) -> Result<Value> {
@@ -1134,11 +1188,11 @@ mod tests {
                 "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))",
                 "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))"
             ),
-            /*
             (
                 "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))",
                 "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))"
             ),
+            /*
             (
                 "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd x (= Nat 1 2))))",
                 "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd (the Absurd x) (= Nat 1 2))))"

@@ -37,6 +37,7 @@ pub enum Error {
     SynthCongNotArrowType(Core),
     SynthCongNotEqType(Core),
     SynthRecListNotListType(Core),
+    SynthIndEitherNotEitherType(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -704,7 +705,72 @@ impl Elab {
                 }
             }
             ExprAt::IndEq(_, _, _) => todo!(),
-            ExprAt::IndEither(_, _, _, _) => todo!(),
+            ExprAt::IndEither(tgt, mot, l, r) => {
+                let Synth {
+                    the_type: tgt_t,
+                    the_expr: tgt,
+                } = self.synth(tgt)?;
+                match tgt_t {
+                    Value::Either(lt, rt) => {
+                        let mot_t = self.eval_in_env(
+                            vec![("L".into(), *lt.clone()), ("R".into(), *rt.clone())],
+                            Core::Pi(
+                                "x".into(),
+                                Core::Either(
+                                    Core::Var("L".into()).into(),
+                                    Core::Var("R".into()).into(),
+                                )
+                                .into(),
+                                Core::U.into(),
+                            ),
+                        )?;
+                        let mot = self.check(&mot_t, mot)?;
+                        let mot_v = self.eval(&mot)?;
+                        let lm_t = self.eval_in_env(
+                            vec![("L".into(), *lt), ("mot".into(), mot_v.clone())],
+                            Core::Pi(
+                                "l".into(),
+                                Core::Var("L".into()).into(),
+                                Core::App(
+                                    Core::Var("mot".into()).into(),
+                                    Core::Left(Core::Var("l".into()).into()).into(),
+                                )
+                                .into(),
+                            ),
+                        )?;
+                        let l = self.check(&lm_t, l)?;
+                        let rm_t = self.eval_in_env(
+                            vec![("R".into(), *rt), ("mot".into(), mot_v.clone())],
+                            Core::Pi(
+                                "r".into(),
+                                Core::Var("R".into()).into(),
+                                Core::App(
+                                    Core::Var("mot".into()).into(),
+                                    Core::Right(Core::Var("r".into()).into()).into(),
+                                )
+                                .into(),
+                            ),
+                        )?;
+                        let r = self.check(&rm_t, r)?;
+                        let tgt_v = self.eval(&tgt)?;
+                        let ty = self.eval_in_env(
+                            vec![("tgt".into(), tgt_v), ("mot".into(), mot_v)],
+                            Core::App(
+                                Core::Var("mot".into()).into(),
+                                Core::Var("tgt".into()).into(),
+                            ),
+                        )?;
+                        Ok(Synth {
+                            the_type: ty,
+                            the_expr: Core::IndEither(tgt.into(), mot.into(), l.into(), r.into()),
+                        })
+                    }
+                    other => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthIndEitherNotEitherType(t))
+                    }
+                }
+            }
             ExprAt::Sole => Ok(Synth {
                 the_type: Value::Trivial,
                 the_expr: Core::Sole,
@@ -740,7 +806,14 @@ impl Elab {
                     the_expr: Core::Eq(ty.into(), from.into(), to.into()),
                 })
             }
-            ExprAt::Either(_, _) => todo!(),
+            ExprAt::Either(l, r) => {
+                let l = self.check(&Value::U, l)?;
+                let r = self.check(&Value::U, r)?;
+                Ok(Synth {
+                    the_type: Value::U,
+                    the_expr: Core::Either(l.into(), r.into()),
+                })
+            }
             ExprAt::Trivial => Ok(Synth {
                 the_type: Value::U,
                 the_expr: Core::Trivial,
