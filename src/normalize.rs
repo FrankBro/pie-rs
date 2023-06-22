@@ -451,14 +451,14 @@ impl Norm {
                         .with_env(vec![("E".into(), *t), ("bt".into(), bt.clone())])
                         .eval(&Core::Pi(
                             "e".into(),
-                            Core::Var("E".into()).into(),
+                            Core::var("E").into(),
                             Core::Pi(
                                 "es".into(),
-                                Core::List(Core::Var("E".into()).into()).into(),
+                                Core::List(Core::var("E").into()).into(),
                                 Core::Pi(
                                     "so-far".into(),
-                                    Core::Var("bt".into()).into(),
-                                    Core::Var("bt".into()).into(),
+                                    Core::var("bt").into(),
+                                    Core::var("bt").into(),
                                 )
                                 .into(),
                             )
@@ -613,21 +613,17 @@ impl Norm {
                         .with_env(vec![("L".into(), *l.clone()), ("R".into(), *r.clone())])
                         .eval(&Core::Pi(
                             "e".into(),
-                            Core::Either(
-                                Core::Var("L".into()).into(),
-                                Core::Var("R".into()).into(),
-                            )
-                            .into(),
+                            Core::Either(Core::var("L").into(), Core::var("R").into()).into(),
                             Core::U.into(),
                         ))?;
                     let left_t = self
                         .with_env(vec![("L".into(), *l), ("mot".into(), mot.clone())])
                         .eval(&Core::Pi(
                             "l".into(),
-                            Core::Var("L".into()).into(),
+                            Core::var("L").into(),
                             Core::App(
-                                Core::Var("mot".into()).into(),
-                                Core::Left(Core::Var("l".into()).into()).into(),
+                                Core::var("mot").into(),
+                                Core::Left(Core::var("l").into()).into(),
                             )
                             .into(),
                         ))?;
@@ -635,11 +631,11 @@ impl Norm {
                         .with_env(vec![("R".into(), *r), ("mot".into(), mot.clone())])
                         .eval(&Core::Pi(
                             "r".into(),
-                            Core::Var("R".into()).into(),
+                            Core::var("R").into(),
                             Core::App(
-                                Core::Var("mot".into()).into(),
+                                Core::var("mot").into(),
                                 // TODO: Left twice??
-                                Core::Left(Core::Var("r".into()).into()).into(),
+                                Core::Left(Core::var("r").into()).into(),
                             )
                             .into(),
                         ))?;
@@ -970,7 +966,7 @@ mod tests {
                 "f".into(),
                 Core::Lambda(
                     "x".into(),
-                    Core::App(Core::Var("f".into()).into(), Core::Var("x".into()).into()).into(),
+                    Core::App(Core::var("f").into(), Core::var("x").into()).into(),
                 )
                 .into(),
             )
@@ -1036,8 +1032,8 @@ mod tests {
                     Box::new(Core::Trivial),
                     Box::new(Core::Eq(
                         Box::new(Core::Trivial),
-                        Box::new(Core::Var("x".into())),
-                        Box::new(Core::Var("y".into())),
+                        Box::new(Core::var("x")),
+                        Box::new(Core::var("y")),
                     )),
                 )
                 .into(),
@@ -1053,8 +1049,8 @@ mod tests {
                     Box::new(Core::Trivial),
                     Box::new(Core::Eq(
                         Box::new(Core::Trivial),
-                        Box::new(Core::Var("x".into())),
-                        Box::new(Core::Var("y".into())),
+                        Box::new(Core::var("x")),
+                        Box::new(Core::var("y")),
                     )),
                 )),
             )),
@@ -1062,7 +1058,7 @@ mod tests {
                 "x".into(),
                 Box::new(Core::Lambda(
                     "y".into(),
-                    Box::new(Core::Same(Box::new(Core::Var("x".into())))),
+                    Box::new(Core::Same(Box::new(Core::var("x")))),
                 )),
             )),
         );

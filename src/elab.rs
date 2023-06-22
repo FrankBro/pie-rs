@@ -431,11 +431,7 @@ impl Elab {
                 } = self.synth(base)?;
                 let step_t = self.eval_in_env(
                     vec![("base-type".into(), bt_v.clone())],
-                    Core::Pi(
-                        "x".into(),
-                        Core::Nat.into(),
-                        Core::Var("base-type".into()).into(),
-                    ),
+                    Core::Pi("x".into(), Core::Nat.into(), Core::var("base-type").into()),
                 )?;
                 let step = self.check(&step_t, step)?;
                 let bt = self.read_back_type(&bt_v)?;
@@ -454,8 +450,8 @@ impl Elab {
                     vec![("base-type".into(), bt_v.clone())],
                     Core::Pi(
                         "x".into(),
-                        Core::Var("base-type".into()).into(),
-                        Core::Var("base-type".into()).into(),
+                        Core::var("base-type").into(),
+                        Core::var("base-type").into(),
                     ),
                 )?;
                 let step = self.check(&step_t, step)?;
@@ -478,8 +474,8 @@ impl Elab {
                         Core::Nat.into(),
                         Core::Pi(
                             "x".into(),
-                            Core::Var("base-type".into()).into(),
-                            Core::Var("base-type".into()).into(),
+                            Core::var("base-type").into(),
+                            Core::var("base-type").into(),
                         )
                         .into(),
                     ),
@@ -514,11 +510,10 @@ impl Elab {
                         Core::Nat.into(),
                         Core::Pi(
                             "almost".into(),
-                            Core::App(Core::Var("mot".into()).into(), Core::Var("k".into()).into())
-                                .into(),
+                            Core::App(Core::var("mot").into(), Core::var("k").into()).into(),
                             Core::App(
-                                Core::Var("mot".into()).into(),
-                                Core::Add1(Core::Var("k".into()).into()).into(),
+                                Core::var("mot").into(),
+                                Core::Add1(Core::var("k").into()).into(),
                             )
                             .into(),
                         )
@@ -559,14 +554,14 @@ impl Elab {
                             vec![("E".into(), *et), ("base-type".into(), bt_v.clone())],
                             Core::Pi(
                                 "e".into(),
-                                Core::Var("E".into()).into(),
+                                Core::var("E").into(),
                                 Core::Pi(
                                     "es".into(),
-                                    Core::List(Core::Var("E".into()).into()).into(),
+                                    Core::List(Core::var("E").into()).into(),
                                     Core::Pi(
                                         "almost".into(),
-                                        Core::Var("base-type".into()).into(),
-                                        Core::Var("base-type".into()).into(),
+                                        Core::var("base-type").into(),
+                                        Core::var("base-type").into(),
                                     )
                                     .into(),
                                 )
@@ -606,7 +601,7 @@ impl Elab {
                     Value::Eq(a, from, to) => {
                         let mot_t = self.eval_in_env(
                             vec![("A".into(), *a.clone())],
-                            Core::Pi("x".into(), Core::Var("A".into()).into(), Core::U.into()),
+                            Core::Pi("x".into(), Core::var("A").into(), Core::U.into()),
                         )?;
                         let mot = self.check(&mot_t, mot)?;
                         let mot_v = self.eval(&mot)?;
@@ -716,11 +711,7 @@ impl Elab {
                             vec![("L".into(), *lt.clone()), ("R".into(), *rt.clone())],
                             Core::Pi(
                                 "x".into(),
-                                Core::Either(
-                                    Core::Var("L".into()).into(),
-                                    Core::Var("R".into()).into(),
-                                )
-                                .into(),
+                                Core::Either(Core::var("L").into(), Core::var("R").into()).into(),
                                 Core::U.into(),
                             ),
                         )?;
@@ -730,10 +721,10 @@ impl Elab {
                             vec![("L".into(), *lt), ("mot".into(), mot_v.clone())],
                             Core::Pi(
                                 "l".into(),
-                                Core::Var("L".into()).into(),
+                                Core::var("L").into(),
                                 Core::App(
-                                    Core::Var("mot".into()).into(),
-                                    Core::Left(Core::Var("l".into()).into()).into(),
+                                    Core::var("mot").into(),
+                                    Core::Left(Core::var("l").into()).into(),
                                 )
                                 .into(),
                             ),
@@ -743,10 +734,10 @@ impl Elab {
                             vec![("R".into(), *rt), ("mot".into(), mot_v.clone())],
                             Core::Pi(
                                 "r".into(),
-                                Core::Var("R".into()).into(),
+                                Core::var("R").into(),
                                 Core::App(
-                                    Core::Var("mot".into()).into(),
-                                    Core::Right(Core::Var("r".into()).into()).into(),
+                                    Core::var("mot").into(),
+                                    Core::Right(Core::var("r").into()).into(),
                                 )
                                 .into(),
                             ),
@@ -755,10 +746,7 @@ impl Elab {
                         let tgt_v = self.eval(&tgt)?;
                         let ty = self.eval_in_env(
                             vec![("tgt".into(), tgt_v), ("mot".into(), mot_v)],
-                            Core::App(
-                                Core::Var("mot".into()).into(),
-                                Core::Var("tgt".into()).into(),
-                            ),
+                            Core::App(Core::var("mot").into(), Core::var("tgt").into()),
                         )?;
                         Ok(Synth {
                             the_type: ty,

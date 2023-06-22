@@ -258,6 +258,12 @@ pub enum Core {
     Todo(Loc, Box<Core>),
 }
 
+impl Core {
+    pub fn var(name: &str) -> Core {
+        Core::Var(name.into())
+    }
+}
+
 enum TopLevel<T> {
     Claim(Located<Symbol>, T),
     Define(Located<Symbol>, T),
