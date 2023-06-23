@@ -387,7 +387,28 @@ pub struct Closure<T> {
     pub expr: Box<Core>,
 }
 
-pub type Env<T> = Vec<(Symbol, T)>;
+#[derive(Clone, Debug, PartialEq)]
+pub struct Env<T>(pub Vec<(Symbol, T)>);
+
+impl<T> Env<T> {
+    pub fn with<I: Into<Symbol>>(mut self, name: I, t: T) -> Self {
+        let symbol = name.into();
+        self.0.push((symbol, t));
+        self
+    }
+}
+
+impl<T> From<Vec<(Symbol, T)>> for Env<T> {
+    fn from(value: Vec<(Symbol, T)>) -> Self {
+        Self(value)
+    }
+}
+
+impl<T> Default for Env<T> {
+    fn default() -> Self {
+        Self(Vec::new())
+    }
+}
 
 #[derive(Debug)]
 pub enum MessagePart<T> {

@@ -38,6 +38,10 @@ pub enum Error {
     SynthCongNotEqType(Core),
     SynthRecListNotListType(Core),
     SynthIndEitherNotEitherType(Core),
+    SynthVecHeadEmpty(Core),
+    SynthVecHeadNotVec(Core),
+    SynthVecTailEmpty(Core),
+    SynthVecTailNotVec(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -84,7 +88,8 @@ impl Context<Value> {
                 ContextEntry::Defined(_, _, d) => Some((x.clone(), d.clone())),
                 ContextEntry::Claimed(_, _) => None,
             })
-            .collect()
+            .collect::<Vec<(Symbol, Value)>>()
+            .into()
     }
 }
 
@@ -392,7 +397,7 @@ impl Elab {
                 let tgt = self.check(&Value::Nat, tgt)?;
                 let Synth::The(bt_v, base) = self.synth(base)?;
                 let step_t = self.eval_in_env(
-                    vec![("base-type".into(), bt_v.clone())],
+                    Env::default().with("base-type", bt_v.clone()),
                     Core::pi("x", Core::Nat, Core::var("base-type")),
                 )?;
                 let step = self.check(&step_t, step)?;
@@ -406,7 +411,7 @@ impl Elab {
                 let tgt = self.check(&Value::Nat, tgt)?;
                 let Synth::The(bt_v, base) = self.synth(base)?;
                 let step_t = self.eval_in_env(
-                    vec![("base-type".into(), bt_v.clone())],
+                    Env::default().with("base-type", bt_v.clone()),
                     Core::pi("x", Core::var("base-type"), Core::var("base-type")),
                 )?;
                 let step = self.check(&step_t, step)?;
@@ -420,7 +425,7 @@ impl Elab {
                 let tgt = self.check(&Value::Nat, tgt)?;
                 let Synth::The(bt_v, base) = self.synth(base)?;
                 let step_t = self.eval_in_env(
-                    vec![("base-type".into(), bt_v.clone())],
+                    Env::default().with("base-type", bt_v.clone()),
                     Core::pi(
                         "n",
                         Core::Nat,
@@ -441,7 +446,7 @@ impl Elab {
                         "x".into(),
                         Value::Nat.into(),
                         Closure {
-                            env: Vec::new(),
+                            env: Env::default(),
                             expr: Core::U.into(),
                         },
                     ),
@@ -451,7 +456,7 @@ impl Elab {
                 let base_t = self.apply(mot_v.clone(), Value::Zero)?;
                 let base = self.check(&base_t, base)?;
                 let step_t = self.eval_in_env(
-                    vec![("mot".into(), mot_v.clone())],
+                    Env::default().with("mot", mot_v.clone()),
                     Core::pi(
                         "k",
                         Core::Nat,
@@ -487,7 +492,9 @@ impl Elab {
                     Value::List(et) => {
                         let Synth::The(bt_v, base) = self.synth(base)?;
                         let step_t = self.eval_in_env(
-                            vec![("E".into(), *et), ("base-type".into(), bt_v.clone())],
+                            Env::default()
+                                .with("E", *et)
+                                .with("base-type", bt_v.clone()),
                             Core::pi(
                                 "e",
                                 Core::var("E"),
@@ -518,15 +525,86 @@ impl Elab {
             ExprAt::IndList(_, _, _, _) => {
                 todo!()
             }
-            ExprAt::VecHead(_) => todo!(),
-            ExprAt::VecTail(_) => todo!(),
-            ExprAt::IndVec(_, _, _, _, _) => todo!(),
+            ExprAt::VecHead(es) => {
+                let Synth::The(es_t, es) = self.synth(es)?;
+                match es_t {
+                    Value::Vec(elem_t, len) => match *len {
+                        Value::Add1(k) => Ok(Synth::The(*elem_t, Core::VecHead(es.into()))),
+                        other => {
+                            let len = self.read_back(&Normal::The(Value::Nat, other))?;
+                            Err(Error::SynthVecHeadEmpty(len))
+                        }
+                    },
+                    other => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthVecHeadNotVec(t))
+                    }
+                }
+            }
+            ExprAt::VecTail(es) => {
+                let Synth::The(es_t, es) = self.synth(es)?;
+                match es_t {
+                    Value::Vec(elem_t, len) => match *len {
+                        Value::Add1(k) => {
+                            Ok(Synth::The(Value::Vec(elem_t, k), Core::VecTail(es.into())))
+                        }
+                        other => {
+                            let len = self.read_back(&Normal::The(Value::Nat, other))?;
+                            Err(Error::SynthVecTailEmpty(len))
+                        }
+                    },
+                    other => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthVecTailNotVec(t))
+                    }
+                }
+            }
+            ExprAt::IndVec(len, es, mot, base, step) => {
+                let len = self.check(&Value::Nat, len)?;
+                let len_v = self.eval(&len)?;
+                let Synth::The(es_t, es) = self.synth(es)?;
+                match es_t {
+                    Value::Vec(elem, len) => {
+                        // let mot_t = self.eval_in_env(env, c)
+                    }
+                    _ => todo!(),
+                }
+                todo!()
+                //          do same VNat lenv len''
+                //             motT <- evalInEnv (None :> (sym "E", elem))
+                //                       (CPi (sym "k") CNat
+                //                         (CPi (sym "es") (CVec (CVar (sym "E")) (CVar (sym "k")))
+                //                           CU))
+                //             mot' <- check motT mot
+                //             motv <- eval mot'
+                //             baseT <- doApplyMany motv [VZero, VVecNil]
+                //             base' <- check baseT base
+                //             stepT <- evalInEnv (None :> (sym "E", elem) :> (sym "mot", motv))
+                //                        (CPi (sym "k") CNat
+                //                          (CPi (sym "e") (CVar (sym "E"))
+                //                            (CPi (sym "es") (CVec (CVar (sym "E")) (CVar (sym "k")))
+                //                              (CPi (sym "so-far") (CApp (CApp (CVar (sym "mot"))
+                //                                                              (CVar (sym "k")))
+                //                                                        (CVar (sym "es")))
+                //                                (CApp (CApp (CVar (sym "mot"))
+                //                                            (CAdd1 (CVar (sym "k"))))
+                //                                       (CVecCons (CVar (sym "e"))
+                //                                                 (CVar (sym "es"))))))))
+                //             step' <- check stepT step
+                //             lenv <- eval len'
+                //             esv <- eval es'
+                //             ty <- doApplyMany motv [lenv, esv]
+                //             return (SThe ty (CIndVec len' es' mot' base' step'))
+                //        other ->
+                //          do t <- readBackType other
+                //             failure [MText (T.pack "Expected a Vec, got a"), MVal t]
+            }
             ExprAt::Replace(tgt, mot, base) => {
                 let Synth::The(tgt_t, tgt) = self.synth(tgt)?;
                 match tgt_t {
                     Value::Eq(a, from, to) => {
                         let mot_t = self.eval_in_env(
-                            vec![("A".into(), *a.clone())],
+                            Env::default().with("A", *a.clone()),
                             Core::pi("x", Core::var("A"), Core::U),
                         )?;
                         let mot = self.check(&mot_t, mot)?;
@@ -615,7 +693,7 @@ impl Elab {
                 match tgt_t {
                     Value::Either(lt, rt) => {
                         let mot_t = self.eval_in_env(
-                            vec![("L".into(), *lt.clone()), ("R".into(), *rt.clone())],
+                            Env::default().with("L", *lt.clone()).with("R", *rt.clone()),
                             Core::pi(
                                 "x",
                                 Core::Either(Core::var("L").into(), Core::var("R").into()),
@@ -625,7 +703,7 @@ impl Elab {
                         let mot = self.check(&mot_t, mot)?;
                         let mot_v = self.eval(&mot)?;
                         let lm_t = self.eval_in_env(
-                            vec![("L".into(), *lt), ("mot".into(), mot_v.clone())],
+                            Env::default().with("L", *lt).with("mot", mot_v.clone()),
                             Core::pi(
                                 "l",
                                 Core::var("L"),
@@ -637,7 +715,7 @@ impl Elab {
                         )?;
                         let l = self.check(&lm_t, l)?;
                         let rm_t = self.eval_in_env(
-                            vec![("R".into(), *rt), ("mot".into(), mot_v.clone())],
+                            Env::default().with("R", *rt).with("mot", mot_v.clone()),
                             Core::pi(
                                 "r",
                                 Core::var("R"),
@@ -650,7 +728,7 @@ impl Elab {
                         let r = self.check(&rm_t, r)?;
                         let tgt_v = self.eval(&tgt)?;
                         let ty = self.eval_in_env(
-                            vec![("tgt".into(), tgt_v), ("mot".into(), mot_v)],
+                            Env::default().with("tgt", tgt_v).with("mot", mot_v),
                             Core::App(Core::var("mot").into(), Core::var("tgt").into()),
                         )?;
                         Ok(Synth::The(

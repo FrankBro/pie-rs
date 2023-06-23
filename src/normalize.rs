@@ -54,12 +54,12 @@ impl Norm {
 
     pub fn instantiate(&self, clos: Closure<Value>, x: Symbol, v: Value) -> Result<Value> {
         let mut env = clos.env.clone();
-        env.push((x, v));
+        env = env.with(x, v);
         self.with_env(env).eval(&clos.expr)
     }
 
     fn var(&self, x: &Symbol) -> Result<Value> {
-        match self.env.iter().find(|(y, _v)| x == y) {
+        match self.env.0.iter().find(|(y, _v)| x == y) {
             Some((_, v)) => Ok(v.clone()),
             None => Err(Error::VarNotFound(x.clone())),
         }
@@ -296,7 +296,9 @@ impl Norm {
                     let ty_name = self.fresh("ty");
                     let k = self.fresh("k");
                     let core = Core::pi(k, Core::Nat, Core::Var(ty_name.clone()));
-                    let step_ty = self.with_env(vec![(ty_name, t.clone())]).eval(&core)?;
+                    let step_ty = self
+                        .with_env(Env::default().with(ty_name, t.clone()))
+                        .eval(&core)?;
                     Ok(Value::Neu(
                         Box::new(t.clone()),
                         Box::new(Neutral::WhichNat(
@@ -324,7 +326,9 @@ impl Norm {
                     let ty_name = self.fresh("ty");
                     let k = self.fresh("k");
                     let core = Core::pi(k, Core::Var(ty_name.clone()), Core::Var(ty_name.clone()));
-                    let step_ty = self.with_env(vec![(ty_name, t.clone())]).eval(&core)?;
+                    let step_ty = self
+                        .with_env(Env::default().with(ty_name, t.clone()))
+                        .eval(&core)?;
                     Ok(Value::Neu(
                         Box::new(t.clone()),
                         Box::new(Neutral::IterNat(
@@ -358,7 +362,9 @@ impl Norm {
                         Core::Nat,
                         Core::pi(x, Core::Var(ty_name.clone()), Core::Var(ty_name.clone())),
                     );
-                    let step_ty = self.with_env(vec![(ty_name, t.clone())]).eval(&core)?;
+                    let step_ty = self
+                        .with_env(Env::default().with(ty_name, t.clone()))
+                        .eval(&core)?;
                     Ok(Value::Neu(
                         Box::new(t.clone()),
                         Box::new(Neutral::RecNat(
@@ -390,7 +396,7 @@ impl Norm {
                         k.clone(),
                         Box::new(Value::Nat),
                         Closure {
-                            env: Vec::new(),
+                            env: Env::default(),
                             expr: Core::U.into(),
                         },
                     );
@@ -412,7 +418,9 @@ impl Norm {
                             ),
                         ),
                     );
-                    let step_ty = self.with_env(vec![(mot_name, mot.clone())]).eval(&core)?;
+                    let step_ty = self
+                        .with_env(Env::default().with(mot_name, mot.clone()))
+                        .eval(&core)?;
                     Ok(Value::Neu(
                         Box::new(t),
                         Box::new(Neutral::IndNat(
@@ -439,7 +447,7 @@ impl Norm {
             Value::Neu(n, ne) => match *n {
                 Value::List(t) => {
                     let step_t = self
-                        .with_env(vec![("E".into(), *t), ("bt".into(), bt.clone())])
+                        .with_env(Env::default().with("E", *t).with("bt", bt.clone()))
                         .eval(&Core::pi(
                             "e",
                             Core::var("E"),
@@ -481,7 +489,7 @@ impl Norm {
                                     "x".into(),
                                     a,
                                     Closure {
-                                        env: Vec::new(),
+                                        env: Env::default(),
                                         expr: Core::U.into(),
                                     },
                                 ),
@@ -545,7 +553,11 @@ impl Norm {
                     let a = self.fresh("A");
                     let b = self.fresh("B");
                     let fun_ty = self
-                        .with_env(vec![(a.clone(), *t), (b.clone(), ret.clone())])
+                        .with_env(
+                            Env::default()
+                                .with(a.clone(), *t)
+                                .with(b.clone(), ret.clone()),
+                        )
                         .eval(&Core::Pi(x, Core::Var(a).into(), Core::Var(b).into()))?;
                     Ok(Value::Neu(
                         Value::Eq(ret.into(), from.into(), to.into()).into(),
@@ -595,14 +607,14 @@ impl Norm {
             Value::Neu(n, ne) => match *n {
                 Value::Either(l, r) => {
                     let mot_t = self
-                        .with_env(vec![("L".into(), *l.clone()), ("R".into(), *r.clone())])
+                        .with_env(Env::default().with("L", *l.clone()).with("R", *r.clone()))
                         .eval(&Core::pi(
                             "e",
                             Core::Either(Core::var("L").into(), Core::var("R").into()),
                             Core::U,
                         ))?;
                     let left_t = self
-                        .with_env(vec![("L".into(), *l), ("mot".into(), mot.clone())])
+                        .with_env(Env::default().with("L", *l).with("mot", mot.clone()))
                         .eval(&Core::pi(
                             "l",
                             Core::var("L"),
@@ -612,7 +624,7 @@ impl Norm {
                             ),
                         ))?;
                     let right_t = self
-                        .with_env(vec![("R".into(), *r), ("mot".into(), mot.clone())])
+                        .with_env(Env::default().with("R", *r).with("mot", mot.clone()))
                         .eval(&Core::pi(
                             "r",
                             Core::var("R"),
@@ -902,7 +914,7 @@ mod tests {
     use crate::{
         elab::{Elab, Synth},
         parse::parse_expr,
-        types::{Closure, Core, Loc, Pos, Value},
+        types::{Closure, Core, Env, Loc, Pos, Value},
     };
 
     use super::Norm;
@@ -933,13 +945,13 @@ mod tests {
                 "x".into(),
                 Value::Nat.into(),
                 Closure {
-                    env: Vec::new(),
+                    env: Env::default(),
                     expr: Core::Nat.into(),
                 },
             )
             .into(),
             Closure {
-                env: Vec::new(),
+                env: Env::default(),
                 expr: Core::pi("x₁", Core::Nat, Core::Nat).into(),
             },
         );
@@ -1003,7 +1015,7 @@ mod tests {
             "x".into(),
             Value::Trivial.into(),
             Closure {
-                env: Vec::new(),
+                env: Env::default(),
                 expr: Core::pi(
                     "y",
                     Core::Trivial,
@@ -1169,11 +1181,13 @@ mod tests {
                 "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd x (= Nat 1 2))))",
                 "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd (the Absurd x) (= Nat 1 2))))"
             ),
-            /*
+            /* TODO: stack overflow
             (
                 "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))",
                 "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))"
             ),
+            */
+            /*
             (
                 "(the (Pi ((len Nat) (es (Vec Atom len))) (= (Vec Atom (add1 len)) (vec:: 'prickly-pear es) (vec:: 'prickly-pear es))) (lambda (len es) (ind-Vec len es (lambda (k xs) (= (Vec Atom (add1 k)) (vec:: 'prickly-pear xs) (vec:: 'prickly-pear xs))) (same (vec:: 'prickly-pear vecnil)) (lambda (k x xs so-far) (same (vec:: 'prickly-pear (vec:: x xs)))))))",
                 "(the (Pi ((len Nat) (es (Vec Atom len))) (= (Vec Atom (add1 len)) (vec:: 'prickly-pear es) (vec:: 'prickly-pear es))) (lambda (len es) (ind-Vec len es (lambda (k xs) (= (Vec Atom (add1 k)) (vec:: 'prickly-pear xs) (vec:: 'prickly-pear xs))) (same (vec:: 'prickly-pear vecnil)) (lambda (k x xs so-far) (same (vec:: 'prickly-pear (vec:: x xs)))))))"
