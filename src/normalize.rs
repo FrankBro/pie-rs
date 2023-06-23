@@ -641,7 +641,16 @@ impl Norm {
     }
 
     fn ind_absurd(&self, tgt: Value, mot: Value) -> Result<Value> {
-        todo!()
+        match tgt {
+            Value::Neu(n, ne) => match *n {
+                Value::Absurd => Ok(Value::Neu(
+                    mot.clone().into(),
+                    Neutral::IndAbsurd(ne, Normal::The(Value::U, mot)).into(),
+                )),
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     pub fn read_back(&mut self, n: &Normal) -> Result<Core> {
@@ -1171,11 +1180,11 @@ mod tests {
                 "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))",
                 "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))"
             ),
-            /*
             (
                 "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd x (= Nat 1 2))))",
                 "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd (the Absurd x) (= Nat 1 2))))"
             ),
+            /*
             (
                 "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))",
                 "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))"

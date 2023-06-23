@@ -748,7 +748,15 @@ impl Elab {
                 the_type: Value::Trivial,
                 the_expr: Core::Sole,
             }),
-            ExprAt::IndAbsurd(_, _) => todo!(),
+            ExprAt::IndAbsurd(tgt, mot) => {
+                let tgt = self.check(&Value::Absurd, tgt)?;
+                let mot = self.check(&Value::U, mot)?;
+                let mot_v = self.eval(&mot)?;
+                Ok(Synth {
+                    the_type: mot_v,
+                    the_expr: Core::IndAbsurd(tgt.into(), mot.into()),
+                })
+            }
             ExprAt::Atom => Ok(Synth {
                 the_type: Value::U,
                 the_expr: Core::Atom,
