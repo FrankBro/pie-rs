@@ -442,14 +442,7 @@ impl Elab {
             ExprAt::IndNat(tgt, mot, base, step) => {
                 let tgt = self.check(&Value::Nat, tgt)?;
                 let mot = self.check(
-                    &Value::Pi(
-                        "x".into(),
-                        Value::Nat.into(),
-                        Closure {
-                            env: Env::default(),
-                            expr: Core::U.into(),
-                        },
-                    ),
+                    &Value::Pi("x".into(), Value::Nat.into(), Closure::new(Core::U)),
                     mot,
                 )?;
                 let mot_v = self.eval(&mot)?;

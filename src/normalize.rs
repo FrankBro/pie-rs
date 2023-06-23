@@ -392,14 +392,7 @@ impl Norm {
                 Value::Nat => {
                     let t = self.apply(mot.clone(), tgt)?;
                     let k = self.fresh("k");
-                    let mot_ty = Value::Pi(
-                        k.clone(),
-                        Box::new(Value::Nat),
-                        Closure {
-                            env: Env::default(),
-                            expr: Core::U.into(),
-                        },
-                    );
+                    let mot_ty = Value::Pi(k.clone(), Box::new(Value::Nat), Closure::new(Core::U));
                     let base_ty = self.apply(mot.clone(), Value::Zero)?;
                     let so_far = self.fresh("so-far");
                     let mot_name = self.fresh("mot");
@@ -484,17 +477,7 @@ impl Norm {
                         ty.into(),
                         Neutral::Replace(
                             ne.into(),
-                            Normal::The(
-                                Value::Pi(
-                                    "x".into(),
-                                    a,
-                                    Closure {
-                                        env: Env::default(),
-                                        expr: Core::U.into(),
-                                    },
-                                ),
-                                mot,
-                            ),
+                            Normal::The(Value::Pi("x".into(), a, Closure::new(Core::U)), mot),
                             Normal::The(base_t, base),
                         )
                         .into(),
@@ -941,19 +924,8 @@ mod tests {
         let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
         let expected_ty = Value::Pi(
             "x".into(),
-            Value::Pi(
-                "x".into(),
-                Value::Nat.into(),
-                Closure {
-                    env: Env::default(),
-                    expr: Core::Nat.into(),
-                },
-            )
-            .into(),
-            Closure {
-                env: Env::default(),
-                expr: Core::pi("x₁", Core::Nat, Core::Nat).into(),
-            },
+            Value::Pi("x".into(), Value::Nat.into(), Closure::new(Core::Nat)).into(),
+            Closure::new(Core::pi("x₁", Core::Nat, Core::Nat)),
         );
         assert_eq!(expected_ty, actual_ty);
         let expected_core = Core::The(
@@ -1014,19 +986,15 @@ mod tests {
         let expected_ty = Value::Pi(
             "x".into(),
             Value::Trivial.into(),
-            Closure {
-                env: Env::default(),
-                expr: Core::pi(
-                    "y",
-                    Core::Trivial,
-                    Core::Eq(
-                        Box::new(Core::Trivial),
-                        Box::new(Core::var("x")),
-                        Box::new(Core::var("y")),
-                    ),
-                )
-                .into(),
-            },
+            Closure::new(Core::pi(
+                "y",
+                Core::Trivial,
+                Core::Eq(
+                    Box::new(Core::Trivial),
+                    Box::new(Core::var("x")),
+                    Box::new(Core::var("y")),
+                ),
+            )),
         );
         assert_eq!(expected_ty, actual_ty);
         let expected_core = Core::The(

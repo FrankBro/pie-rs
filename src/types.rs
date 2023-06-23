@@ -387,6 +387,14 @@ pub struct Closure<T> {
     pub expr: Box<Core>,
 }
 
+impl<T> Closure<T> {
+    pub fn new(expr: Core) -> Self {
+        let env = Env::default();
+        let expr = expr.into();
+        Self { env, expr }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Env<T>(pub Vec<(Symbol, T)>);
 
