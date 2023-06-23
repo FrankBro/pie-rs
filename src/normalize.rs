@@ -926,10 +926,7 @@ mod tests {
     fn test_synth_arrow() {
         let input = "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))";
         let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth {
-            the_type: actual_ty,
-            the_expr: actual_core,
-        } = elab().synth(&input_expr).unwrap();
+        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
         let expected_ty = Value::Pi(
             "x".into(),
             Value::Pi(
@@ -971,10 +968,7 @@ mod tests {
     fn test_synth_nat_lit() {
         let input = "5";
         let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth {
-            the_type: actual_ty,
-            the_expr: actual_core,
-        } = elab().synth(&input_expr).unwrap();
+        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
         let expected_ty = Value::Nat;
         assert_eq!(expected_ty, actual_ty);
         let expected_core = Core::Add1(
@@ -989,20 +983,14 @@ mod tests {
         let input =
             "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))";
         let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth {
-            the_type: actual_ty,
-            the_expr: actual_core,
-        } = elab().synth(&input_expr).unwrap();
+        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
     }
 
     #[test]
     fn test_synth_recurse() {
         let input = "(which-Nat 5 't (lambda (x) 'nil))";
         let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth {
-            the_type: actual_ty,
-            the_expr: actual_core,
-        } = elab().synth(&input_expr).unwrap();
+        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
         let actual_value = norm().eval(&actual_core).unwrap();
     }
 
@@ -1010,10 +998,7 @@ mod tests {
     fn test_synth_lambda() {
         let input = "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same x)))";
         let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth {
-            the_type: actual_ty,
-            the_expr: actual_core,
-        } = elab().synth(&input_expr).unwrap();
+        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
         let expected_ty = Value::Pi(
             "x".into(),
             Value::Trivial.into(),
@@ -1218,14 +1203,8 @@ mod tests {
         for (input, normal) in cases {
             let norm_expr = parse_expr(SOURCE, normal).unwrap();
             let input_expr = parse_expr(SOURCE, input).unwrap();
-            let Synth {
-                the_type: ty1,
-                the_expr: norm_core,
-            } = elab().synth(&norm_expr).unwrap();
-            let Synth {
-                the_type: ty2,
-                the_expr: input_core,
-            } = elab().synth(&input_expr).unwrap();
+            let Synth::The(ty1, norm_core) = elab().synth(&norm_expr).unwrap();
+            let Synth::The(ty2, input_core) = elab().synth(&input_expr).unwrap();
             elab().same_type(&ty1, &ty2).unwrap();
             let v1 = norm().eval(&norm_core).unwrap();
             let v2 = norm().eval(&input_core).unwrap();

@@ -293,10 +293,7 @@ impl Elab {
             .iter()
             .find(|(y, info)| &x == y && info.in_scope())
         {
-            Some((_, info)) => Ok(Synth {
-                the_type: info.entry_type().clone(),
-                the_expr: Core::Var(x),
-            }),
+            Some((_, info)) => Ok(Synth::The(info.entry_type().clone(), Core::Var(x))),
             None => Err(Error::UnknownVariable(
                 x,
                 self.context.0.iter().map(|(x, _)| x.clone()).collect(),
@@ -306,7 +303,7 @@ impl Elab {
 
     pub fn synth(&mut self, expr: &Expr) -> Result<Synth> {
         let res = self.in_expr(expr, Elab::synth_at)?;
-        let t = self.read_back_type(&res.the_type)?;
+        let t = self.read_back_type(res.the_type())?;
         self.in_expr(expr, move |elab, _| elab.log_info(ElabInfo::ExprHasType(t)))?;
         Ok(res)
     }
@@ -317,10 +314,7 @@ impl Elab {
                 let ty = self.is_type(ty)?;
                 let tv = self.eval(&ty)?;
                 let e = self.check(&tv, e)?;
-                Ok(Synth {
-                    the_type: tv,
-                    the_expr: Core::The(Box::new(ty), Box::new(e)),
-                })
+                Ok(Synth::The(tv, Core::The(Box::new(ty), Box::new(e))))
             }
             ExprAt::Var(x) => {
                 let x = self.apply_renaming(x)?;
@@ -334,24 +328,15 @@ impl Elab {
                     .all(|c| c.is_ascii_alphabetic() || c == '-')
                     && !sym.name.is_empty()
                 {
-                    Ok(Synth {
-                        the_type: Value::Atom,
-                        the_expr: Core::Tick(sym.clone()),
-                    })
+                    Ok(Synth::The(Value::Atom, Core::Tick(sym.clone())))
                 } else {
                     Err(Error::InvalidAtom)
                 }
             }
             ExprAt::Car(pr) => {
-                let Synth {
-                    the_type: ty,
-                    the_expr: pr,
-                } = self.synth(pr)?;
+                let Synth::The(ty, pr) = self.synth(pr)?;
                 match ty {
-                    Value::Sigma(_x, a_t, _d_t) => Ok(Synth {
-                        the_type: *a_t,
-                        the_expr: Core::Car(pr.into()),
-                    }),
+                    Value::Sigma(_x, a_t, _d_t) => Ok(Synth::The(*a_t, Core::Car(pr.into()))),
                     other => {
                         let ty = self.read_back_type(&other)?;
                         Err(Error::CarNotSigma(ty))
@@ -359,18 +344,12 @@ impl Elab {
                 }
             }
             ExprAt::Cdr(pr) => {
-                let Synth {
-                    the_type: ty,
-                    the_expr: pr,
-                } = self.synth(pr)?;
+                let Synth::The(ty, pr) = self.synth(pr)?;
                 match ty {
                     Value::Sigma(x, _a_t, d_t) => {
                         let a = self.eval(&pr).and_then(|v| self.car(v))?;
                         let d_v = self.instantiate(d_t, x, a)?;
-                        Ok(Synth {
-                            the_type: d_v,
-                            the_expr: Core::Cdr(pr.into()),
-                        })
+                        Ok(Synth::The(d_v, Core::Cdr(pr.into())))
                     }
                     other => {
                         let ty = self.read_back_type(&other)?;
@@ -379,9 +358,7 @@ impl Elab {
                 }
             }
             ExprAt::App(f, args) => {
-                let s = self.synth(f)?;
-                let mut f_t = s.the_type;
-                let mut f = s.the_expr;
+                let Synth::The(mut f_t, mut f) = self.synth(f)?;
                 for arg in args {
                     match f_t {
                         Value::Pi(x, dom, ran) => {
@@ -397,72 +374,51 @@ impl Elab {
                         }
                     }
                 }
-                Ok(Synth {
-                    the_type: f_t,
-                    the_expr: f,
-                })
+                Ok(Synth::The(f_t, f))
             }
-            ExprAt::Zero => Ok(Synth {
-                the_type: Value::Nat,
-                the_expr: Core::Zero,
-            }),
+            ExprAt::Zero => Ok(Synth::The(Value::Nat, Core::Zero)),
             ExprAt::Add1(n) => {
                 let n = self.check(&Value::Nat, n)?;
-                Ok(Synth {
-                    the_type: Value::Nat,
-                    the_expr: Core::Add1(Box::new(n)),
-                })
+                Ok(Synth::The(Value::Nat, Core::Add1(Box::new(n))))
             }
             ExprAt::NatLit(n) => {
                 let mut acc = Core::Zero;
                 for _ in 0..*n {
                     acc = Core::Add1(acc.into());
                 }
-                Ok(Synth {
-                    the_type: Value::Nat,
-                    the_expr: acc,
-                })
+                Ok(Synth::The(Value::Nat, acc))
             }
             ExprAt::WhichNat(tgt, base, step) => {
                 let tgt = self.check(&Value::Nat, tgt)?;
-                let Synth {
-                    the_type: bt_v,
-                    the_expr: base,
-                } = self.synth(base)?;
+                let Synth::The(bt_v, base) = self.synth(base)?;
                 let step_t = self.eval_in_env(
                     vec![("base-type".into(), bt_v.clone())],
                     Core::pi("x", Core::Nat, Core::var("base-type")),
                 )?;
                 let step = self.check(&step_t, step)?;
                 let bt = self.read_back_type(&bt_v)?;
-                Ok(Synth {
-                    the_type: bt_v,
-                    the_expr: Core::WhichNat(tgt.into(), bt.into(), base.into(), step.into()),
-                })
+                Ok(Synth::The(
+                    bt_v,
+                    Core::WhichNat(tgt.into(), bt.into(), base.into(), step.into()),
+                ))
             }
             ExprAt::IterNat(tgt, base, step) => {
                 let tgt = self.check(&Value::Nat, tgt)?;
-                let Synth {
-                    the_type: bt_v,
-                    the_expr: base,
-                } = self.synth(base)?;
+                let Synth::The(bt_v, base) = self.synth(base)?;
                 let step_t = self.eval_in_env(
                     vec![("base-type".into(), bt_v.clone())],
                     Core::pi("x", Core::var("base-type"), Core::var("base-type")),
                 )?;
                 let step = self.check(&step_t, step)?;
                 let bt = self.read_back_type(&bt_v)?;
-                Ok(Synth {
-                    the_type: bt_v,
-                    the_expr: Core::IterNat(tgt.into(), bt.into(), base.into(), step.into()),
-                })
+                Ok(Synth::The(
+                    bt_v,
+                    Core::IterNat(tgt.into(), bt.into(), base.into(), step.into()),
+                ))
             }
             ExprAt::RecNat(tgt, base, step) => {
                 let tgt = self.check(&Value::Nat, tgt)?;
-                let Synth {
-                    the_type: bt_v,
-                    the_expr: base,
-                } = self.synth(base)?;
+                let Synth::The(bt_v, base) = self.synth(base)?;
                 let step_t = self.eval_in_env(
                     vec![("base-type".into(), bt_v.clone())],
                     Core::pi(
@@ -473,10 +429,10 @@ impl Elab {
                 )?;
                 let step = self.check(&step_t, step)?;
                 let bt = self.read_back_type(&bt_v)?;
-                Ok(Synth {
-                    the_type: bt_v,
-                    the_expr: Core::RecNat(tgt.into(), bt.into(), base.into(), step.into()),
-                })
+                Ok(Synth::The(
+                    bt_v,
+                    Core::RecNat(tgt.into(), bt.into(), base.into(), step.into()),
+                ))
             }
             ExprAt::IndNat(tgt, mot, base, step) => {
                 let tgt = self.check(&Value::Nat, tgt)?;
@@ -512,33 +468,24 @@ impl Elab {
                 let step = self.check(&step_t, step)?;
                 let tgt_v = self.eval(&tgt)?;
                 let ty = self.apply(mot_v, tgt_v)?;
-                Ok(Synth {
-                    the_type: ty,
-                    the_expr: Core::IndNat(tgt.into(), mot.into(), base.into(), step.into()),
-                })
+                Ok(Synth::The(
+                    ty,
+                    Core::IndNat(tgt.into(), mot.into(), base.into(), step.into()),
+                ))
             }
             ExprAt::ListCons(e, es) => {
-                let Synth {
-                    the_type: et,
-                    the_expr: e,
-                } = self.synth(e)?;
+                let Synth::The(et, e) = self.synth(e)?;
                 let es = self.check(&Value::List(et.clone().into()), es)?;
-                Ok(Synth {
-                    the_type: Value::List(et.into()),
-                    the_expr: Core::ListCons(e.into(), es.into()),
-                })
+                Ok(Synth::The(
+                    Value::List(et.into()),
+                    Core::ListCons(e.into(), es.into()),
+                ))
             }
             ExprAt::RecList(tgt, base, step) => {
-                let Synth {
-                    the_type: lst_t,
-                    the_expr: tgt,
-                } = self.synth(tgt)?;
+                let Synth::The(lst_t, tgt) = self.synth(tgt)?;
                 match lst_t {
                     Value::List(et) => {
-                        let Synth {
-                            the_type: bt_v,
-                            the_expr: base,
-                        } = self.synth(base)?;
+                        let Synth::The(bt_v, base) = self.synth(base)?;
                         let step_t = self.eval_in_env(
                             vec![("E".into(), *et), ("base-type".into(), bt_v.clone())],
                             Core::pi(
@@ -557,15 +504,10 @@ impl Elab {
                         )?;
                         let step = self.check(&step_t, step)?;
                         let bt = self.read_back_type(&bt_v)?;
-                        Ok(Synth {
-                            the_type: bt_v,
-                            the_expr: Core::RecList(
-                                tgt.into(),
-                                bt.into(),
-                                base.into(),
-                                step.into(),
-                            ),
-                        })
+                        Ok(Synth::The(
+                            bt_v,
+                            Core::RecList(tgt.into(), bt.into(), base.into(), step.into()),
+                        ))
                     }
                     other => {
                         let t = self.read_back_type(&other)?;
@@ -580,10 +522,7 @@ impl Elab {
             ExprAt::VecTail(_) => todo!(),
             ExprAt::IndVec(_, _, _, _, _) => todo!(),
             ExprAt::Replace(tgt, mot, base) => {
-                let Synth {
-                    the_type: tgt_t,
-                    the_expr: tgt,
-                } = self.synth(tgt)?;
+                let Synth::The(tgt_t, tgt) = self.synth(tgt)?;
                 match tgt_t {
                     Value::Eq(a, from, to) => {
                         let mot_t = self.eval_in_env(
@@ -595,10 +534,10 @@ impl Elab {
                         let base_t = self.apply(mot_v.clone(), *from)?;
                         let base = self.check(&base_t, base)?;
                         let ty = self.apply(mot_v, *to)?;
-                        Ok(Synth {
-                            the_type: ty,
-                            the_expr: Core::Replace(tgt.into(), mot.into(), base.into()),
-                        })
+                        Ok(Synth::The(
+                            ty,
+                            Core::Replace(tgt.into(), mot.into(), base.into()),
+                        ))
                     }
                     _ => {
                         let t = self.read_back_type(&tgt_t)?;
@@ -607,14 +546,8 @@ impl Elab {
                 }
             }
             ExprAt::Cong(tgt, fun) => {
-                let Synth {
-                    the_type: tgt_t,
-                    the_expr: tgt,
-                } = self.synth(tgt)?;
-                let Synth {
-                    the_type: fun_t,
-                    the_expr: fun,
-                } = self.synth(fun)?;
+                let Synth::The(tgt_t, tgt) = self.synth(tgt)?;
+                let Synth::The(fun_t, fun) = self.synth(fun)?;
                 match (tgt_t, fun_t) {
                     (Value::Eq(ty, from, to), Value::Pi(x, dom, ran)) => {
                         self.same_type(&ty, &dom)?;
@@ -623,10 +556,10 @@ impl Elab {
                         let new_from = self.apply(fun_v.clone(), *from)?;
                         let new_to = self.apply(fun_v, *to)?;
                         let ty = self.read_back_type(&ran)?;
-                        Ok(Synth {
-                            the_type: Value::Eq(ran.into(), new_from.into(), new_to.into()),
-                            the_expr: Core::Cong(tgt.into(), ty.into(), fun.into()),
-                        })
+                        Ok(Synth::The(
+                            Value::Eq(ran.into(), new_from.into(), new_to.into()),
+                            Core::Cong(tgt.into(), ty.into(), fun.into()),
+                        ))
                     }
                     (Value::Eq(_, _, _), other) => {
                         let t = self.read_back_type(&other)?;
@@ -639,15 +572,11 @@ impl Elab {
                 }
             }
             ExprAt::Symm(tgt) => {
-                let Synth {
-                    the_type: tgt_t,
-                    the_expr: tgt,
-                } = self.synth(tgt)?;
+                let Synth::The(tgt_t, tgt) = self.synth(tgt)?;
                 match tgt_t {
-                    Value::Eq(a, from, to) => Ok(Synth {
-                        the_type: Value::Eq(a, to, from),
-                        the_expr: Core::Symm(tgt.into()),
-                    }),
+                    Value::Eq(a, from, to) => {
+                        Ok(Synth::The(Value::Eq(a, to, from), Core::Symm(tgt.into())))
+                    }
                     _ => {
                         let t = self.read_back_type(&tgt_t)?;
                         Err(Error::SynthSymmNotEqType(t))
@@ -655,22 +584,16 @@ impl Elab {
                 }
             }
             ExprAt::Trans(p1, p2) => {
-                let Synth {
-                    the_type: t1,
-                    the_expr: p1,
-                } = self.synth(p1)?;
-                let Synth {
-                    the_type: t2,
-                    the_expr: p2,
-                } = self.synth(p2)?;
+                let Synth::The(t1, p1) = self.synth(p1)?;
+                let Synth::The(t2, p2) = self.synth(p2)?;
                 match (t1, t2) {
                     (Value::Eq(a, from, mid_l), Value::Eq(b, mid_r, to)) => {
                         self.same_type(&a, &b)?;
                         self.same(&a, &mid_l, &mid_r)?;
-                        Ok(Synth {
-                            the_type: Value::Eq(a, from, to),
-                            the_expr: Core::Trans(p1.into(), p2.into()),
-                        })
+                        Ok(Synth::The(
+                            Value::Eq(a, from, to),
+                            Core::Trans(p1.into(), p2.into()),
+                        ))
                     }
                     (Value::Eq(_, _, _), t2) => {
                         let not_eq = self.read_back_type(&t2)?;
@@ -688,10 +611,7 @@ impl Elab {
             }
             ExprAt::IndEq(_, _, _) => todo!(),
             ExprAt::IndEither(tgt, mot, l, r) => {
-                let Synth {
-                    the_type: tgt_t,
-                    the_expr: tgt,
-                } = self.synth(tgt)?;
+                let Synth::The(tgt_t, tgt) = self.synth(tgt)?;
                 match tgt_t {
                     Value::Either(lt, rt) => {
                         let mot_t = self.eval_in_env(
@@ -733,10 +653,10 @@ impl Elab {
                             vec![("tgt".into(), tgt_v), ("mot".into(), mot_v)],
                             Core::App(Core::var("mot").into(), Core::var("tgt").into()),
                         )?;
-                        Ok(Synth {
-                            the_type: ty,
-                            the_expr: Core::IndEither(tgt.into(), mot.into(), l.into(), r.into()),
-                        })
+                        Ok(Synth::The(
+                            ty,
+                            Core::IndEither(tgt.into(), mot.into(), l.into(), r.into()),
+                        ))
                     }
                     other => {
                         let t = self.read_back_type(&other)?;
@@ -744,61 +664,43 @@ impl Elab {
                     }
                 }
             }
-            ExprAt::Sole => Ok(Synth {
-                the_type: Value::Trivial,
-                the_expr: Core::Sole,
-            }),
+            ExprAt::Sole => Ok(Synth::The(Value::Trivial, Core::Sole)),
             ExprAt::IndAbsurd(tgt, mot) => {
                 let tgt = self.check(&Value::Absurd, tgt)?;
                 let mot = self.check(&Value::U, mot)?;
                 let mot_v = self.eval(&mot)?;
-                Ok(Synth {
-                    the_type: mot_v,
-                    the_expr: Core::IndAbsurd(tgt.into(), mot.into()),
-                })
+                Ok(Synth::The(mot_v, Core::IndAbsurd(tgt.into(), mot.into())))
             }
-            ExprAt::Atom => Ok(Synth {
-                the_type: Value::U,
-                the_expr: Core::Atom,
-            }),
+            ExprAt::Atom => Ok(Synth::The(Value::U, Core::Atom)),
             ExprAt::Sigma(_, _) => todo!(),
             ExprAt::Pair(_, _) => todo!(),
             ExprAt::Pi(_, _) => todo!(),
             ExprAt::Arrow(_, _) => todo!(),
-            ExprAt::Nat => Ok(Synth {
-                the_type: Value::U,
-                the_expr: Core::Nat,
-            }),
+            ExprAt::Nat => Ok(Synth::The(Value::U, Core::Nat)),
             ExprAt::List(_) => todo!(),
-            ExprAt::Vec(elem, len) => Ok(Synth {
-                the_type: Value::U,
-                the_expr: Core::Vec(
+            ExprAt::Vec(elem, len) => Ok(Synth::The(
+                Value::U,
+                Core::Vec(
                     self.check(&Value::U, elem)?.into(),
                     self.check(&Value::Nat, len)?.into(),
                 ),
-            }),
+            )),
             ExprAt::Eq(ty, from, to) => {
                 let ty = self.check(&Value::U, ty)?;
                 let tv = self.eval(&ty)?;
                 let from = self.check(&tv, from)?;
                 let to = self.check(&tv, to)?;
-                Ok(Synth {
-                    the_type: Value::U,
-                    the_expr: Core::Eq(ty.into(), from.into(), to.into()),
-                })
+                Ok(Synth::The(
+                    Value::U,
+                    Core::Eq(ty.into(), from.into(), to.into()),
+                ))
             }
             ExprAt::Either(l, r) => {
                 let l = self.check(&Value::U, l)?;
                 let r = self.check(&Value::U, r)?;
-                Ok(Synth {
-                    the_type: Value::U,
-                    the_expr: Core::Either(l.into(), r.into()),
-                })
+                Ok(Synth::The(Value::U, Core::Either(l.into(), r.into())))
             }
-            ExprAt::Trivial => Ok(Synth {
-                the_type: Value::U,
-                the_expr: Core::Trivial,
-            }),
+            ExprAt::Trivial => Ok(Synth::The(Value::U, Core::Trivial)),
             ExprAt::Absurd => todo!(),
             e => Err(Error::CantSynth(e.clone())),
         }
@@ -906,10 +808,7 @@ impl Elab {
                 todo!()
             }
             other => {
-                let Synth {
-                    the_type: other_t,
-                    the_expr: other,
-                } = self.synth_at(other)?;
+                let Synth::The(other_t, other) = self.synth_at(other)?;
                 self.same_type(t, &other_t)?;
                 Ok(other)
             }
@@ -942,7 +841,13 @@ impl Elab {
 }
 
 #[derive(Debug)]
-pub struct Synth {
-    pub the_type: Value,
-    pub the_expr: Core,
+pub enum Synth {
+    The(Value, Core),
+}
+
+impl Synth {
+    fn the_type(&self) -> &Value {
+        let Synth::The(t, _) = &self;
+        t
+    }
 }
