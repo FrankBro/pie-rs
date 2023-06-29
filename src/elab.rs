@@ -42,6 +42,7 @@ pub enum Error {
     SynthVecHeadNotVec(Core),
     SynthVecTailEmpty(Core),
     SynthVecTailNotVec(Core),
+    SynthIndVecExpectedVec(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -171,6 +172,11 @@ impl Elab {
     fn apply(&mut self, fun: Value, arg: Value) -> Result<Value> {
         let norm = self.run_norm();
         norm.apply(fun, arg).map_err(Error::Normalize)
+    }
+
+    fn apply_many(&mut self, fun: Value, args: Vec<Value>) -> Result<Value> {
+        let norm = self.run_norm();
+        norm.apply_many(fun, args).map_err(Error::Normalize)
     }
 
     fn instantiate(&mut self, clos: Closure<Value>, x: Symbol, v: Value) -> Result<Value> {
@@ -557,40 +563,83 @@ impl Elab {
                 let len_v = self.eval(&len)?;
                 let Synth::The(es_t, es) = self.synth(es)?;
                 match es_t {
-                    Value::Vec(elem, len) => {
-                        // let mot_t = self.eval_in_env(env, c)
+                    Value::Vec(elem, vec_len) => {
+                        self.same(&Value::Nat, &len_v, &vec_len)?;
+                        let mot_t = self.eval_in_env(
+                            Env::default().with("E", *elem.clone()),
+                            Core::pi(
+                                "k",
+                                Core::Nat,
+                                Core::pi(
+                                    "es",
+                                    Core::Vec(Core::var("E").into(), Core::var("k").into()),
+                                    Core::U,
+                                ),
+                            ),
+                        )?;
+                        let mot = self.check(&mot_t, mot)?;
+                        let mot_v = self.eval(&mot)?;
+                        let base_t =
+                            self.apply_many(mot_v.clone(), vec![Value::Zero, Value::VecNil])?;
+                        let base = self.check(&base_t, base)?;
+                        let step_t = self.eval_in_env(
+                            Env::default().with("E", *elem).with("mot", mot_v.clone()),
+                            Core::pi(
+                                "k",
+                                Core::Nat,
+                                Core::pi(
+                                    "e",
+                                    Core::var("E"),
+                                    Core::pi(
+                                        "es",
+                                        Core::Vec(Core::var("E").into(), Core::var("K").into()),
+                                        Core::pi(
+                                            "so-far",
+                                            Core::App(
+                                                Core::App(
+                                                    Core::var("mot").into(),
+                                                    Core::var("k").into(),
+                                                )
+                                                .into(),
+                                                Core::var("es").into(),
+                                            ),
+                                            Core::App(
+                                                Core::App(
+                                                    Core::var("mot").into(),
+                                                    Core::Add1(Core::var("k").into()).into(),
+                                                )
+                                                .into(),
+                                                Core::VecCons(
+                                                    Core::var("e").into(),
+                                                    Core::var("es").into(),
+                                                )
+                                                .into(),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        )?;
+                        let step = self.check(&step_t, step)?;
+                        let len_v = self.eval(&len)?;
+                        let es_v = self.eval(&es)?;
+                        let ty = self.apply_many(mot_v, vec![len_v, es_v])?;
+                        Ok(Synth::The(
+                            ty,
+                            Core::IndVec(
+                                len.into(),
+                                es.into(),
+                                mot.into(),
+                                base.into(),
+                                step.into(),
+                            ),
+                        ))
                     }
-                    _ => todo!(),
+                    other => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthIndVecExpectedVec(t))
+                    }
                 }
-                todo!()
-                //          do same VNat lenv len''
-                //             motT <- evalInEnv (None :> (sym "E", elem))
-                //                       (CPi (sym "k") CNat
-                //                         (CPi (sym "es") (CVec (CVar (sym "E")) (CVar (sym "k")))
-                //                           CU))
-                //             mot' <- check motT mot
-                //             motv <- eval mot'
-                //             baseT <- doApplyMany motv [VZero, VVecNil]
-                //             base' <- check baseT base
-                //             stepT <- evalInEnv (None :> (sym "E", elem) :> (sym "mot", motv))
-                //                        (CPi (sym "k") CNat
-                //                          (CPi (sym "e") (CVar (sym "E"))
-                //                            (CPi (sym "es") (CVec (CVar (sym "E")) (CVar (sym "k")))
-                //                              (CPi (sym "so-far") (CApp (CApp (CVar (sym "mot"))
-                //                                                              (CVar (sym "k")))
-                //                                                        (CVar (sym "es")))
-                //                                (CApp (CApp (CVar (sym "mot"))
-                //                                            (CAdd1 (CVar (sym "k"))))
-                //                                       (CVecCons (CVar (sym "e"))
-                //                                                 (CVar (sym "es"))))))))
-                //             step' <- check stepT step
-                //             lenv <- eval len'
-                //             esv <- eval es'
-                //             ty <- doApplyMany motv [lenv, esv]
-                //             return (SThe ty (CIndVec len' es' mot' base' step'))
-                //        other ->
-                //          do t <- readBackType other
-                //             failure [MText (T.pack "Expected a Vec, got a"), MVal t]
             }
             ExprAt::Replace(tgt, mot, base) => {
                 let Synth::The(tgt_t, tgt) = self.synth(tgt)?;
