@@ -917,278 +917,360 @@ mod tests {
         Norm::default()
     }
 
-    #[test]
-    fn test_synth_arrow() {
-        let input = "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))";
+    fn run(input: &str, normal: &str) {
+        let norm_expr = parse_expr(SOURCE, normal).unwrap();
         let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
-        let expected_ty = Value::Pi(
-            "x".into(),
-            Value::Pi("x".into(), Value::Nat.into(), Closure::new(Core::Nat)).into(),
-            Closure::new(Core::pi("x₁", Core::Nat, Core::Nat)),
-        );
-        assert_eq!(expected_ty, actual_ty);
-        let expected_core = Core::The(
-            Core::pi(
-                "x",
-                Core::pi("x", Core::Nat, Core::Nat),
-                Core::pi("x₁", Core::Nat, Core::Nat),
-            )
-            .into(),
-            Core::Lambda(
-                "f".into(),
-                Core::Lambda(
-                    "x".into(),
-                    Core::App(Core::var("f").into(), Core::var("x").into()).into(),
-                )
-                .into(),
-            )
-            .into(),
-        );
-        assert_eq!(expected_core, actual_core);
+        let Synth::The(ty1, norm_core) = elab().synth(&norm_expr).unwrap();
+        let Synth::The(ty2, input_core) = elab().synth(&input_expr).unwrap();
+        elab().same_type(&ty1, &ty2).unwrap();
+        let v1 = norm().eval(&norm_core).unwrap();
+        let v2 = norm().eval(&input_core).unwrap();
+        elab().same(&ty1, &v1, &v2).unwrap();
     }
 
     #[test]
-    fn test_synth_nat_lit() {
-        let input = "5";
-        let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
-        let expected_ty = Value::Nat;
-        assert_eq!(expected_ty, actual_ty);
-        let expected_core = Core::Add1(
-            Core::Add1(Core::Add1(Core::Add1(Core::Add1(Core::Zero.into()).into()).into()).into())
-                .into(),
+    fn trivial_sole() {
+        run("(the Trivial sole)", "sole");
+    }
+
+    #[test]
+    fn four() {
+        run("4", "(add1 (add1 (add1 (add1 zero))))");
+    }
+
+    #[test]
+    fn two_trivial_lambda() {
+        run(
+            "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same x)))",
+            "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same sole)))",
         );
-        assert_eq!(expected_core, actual_core);
     }
 
     #[test]
-    fn test_synth_ind_nat() {
-        let input =
-            "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))";
-        let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
-    }
-
-    #[test]
-    fn test_synth_recurse() {
-        let input = "(which-Nat 5 't (lambda (x) 'nil))";
-        let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
-        let actual_value = norm().eval(&actual_core).unwrap();
-    }
-
-    #[test]
-    fn test_synth_lambda() {
-        let input = "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same x)))";
-        let input_expr = parse_expr(SOURCE, input).unwrap();
-        let Synth::The(actual_ty, actual_core) = elab().synth(&input_expr).unwrap();
-        let expected_ty = Value::Pi(
-            "x".into(),
-            Value::Trivial.into(),
-            Closure::new(Core::pi(
-                "y",
-                Core::Trivial,
-                Core::Eq(
-                    Box::new(Core::Trivial),
-                    Box::new(Core::var("x")),
-                    Box::new(Core::var("y")),
-                ),
-            )),
-        );
-        assert_eq!(expected_ty, actual_ty);
-        let expected_core = Core::The(
-            Box::new(Core::pi(
-                "x",
-                Core::Trivial,
-                Core::pi(
-                    "y",
-                    Core::Trivial,
-                    Core::Eq(
-                        Box::new(Core::Trivial),
-                        Box::new(Core::var("x")),
-                        Box::new(Core::var("y")),
-                    ),
-                ),
-            )),
-            Box::new(Core::Lambda(
-                "x".into(),
-                Box::new(Core::Lambda(
-                    "y".into(),
-                    Box::new(Core::Same(Box::new(Core::var("x")))),
-                )),
-            )),
-        );
-        assert_eq!(expected_core, actual_core);
-    }
-
-    #[test]
-    fn test_norm() {
-        let cases = &[
-            ("(the Trivial sole)", "sole"),
-            ("4", "(add1 (add1 (add1 (add1 zero))))"),
-            (
-                "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same x)))",
-                "(the (Pi ((x Trivial) (y Trivial)) (= Trivial x y)) (lambda (x y) (same sole)))",
-            ),
-            (
+    fn pair_trivial_lambda() {
+        run(
                 "(the (Pi ((x (Pair Trivial Trivial))) (Pair Trivial Trivial)) (lambda (x) x))",
                 "(the (Pi ((y (Pair Trivial Trivial))) (Pair Trivial Trivial)) (lambda (z) (cons sole sole)))"
-            ),
-            (
-                "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (x) x))",
-                "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (f) (lambda (x) sole)))"
-            ),
-            (
-                "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (x) x))",
-                "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))",
-            ),
-            (
-                "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))",
-                "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))"
-            ),
-            ("(which-Nat zero 't (lambda (x) 'nil))", "(the Atom 't)"),
-            ("(which-Nat 13 't (lambda (x) 'nil))", "(the Atom 'nil)"),
-            (
-                "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))",
-                "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))"
-            ),
-            ("(iter-Nat zero 3 (lambda (x) (add1 x)))" , "(the Nat 3)"),
-            ("(iter-Nat 2 3 (lambda (x) (add1 x)))" , "(the Nat 5)"),
-            (
-                "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))",
-                "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))"
-            ),
-            (
-                "(rec-Nat zero (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
-                "(the (List Nat) nil)",
-            ),
-            (
-                "(rec-Nat 3 (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
-                "(the (List Nat) (:: 2 (:: 1 (:: 0 nil))))",
-            ),
-            (
-                "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))",
-                "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))"
-            ),
-            (
-                "(ind-Nat zero (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
-                "(the (Vec Nat 0) vecnil)"
-            ),
-            (
-                "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
-                "(the (Vec Nat 2) (vec:: 1 (vec:: 0 vecnil)))"
-            ),
-            (
-                "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))",
-                "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))"
-            ),
-            (
-                "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))",
-                "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))"
-            ),
-            ("(car (the (Pair Nat Nat) (cons 2 3)))", "2"),
-            ("(cdr (the (Pair Nat Nat) (cons 2 3)))", "3"),
-            (
-                "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetoj)))) (= Atom (car p) 'syltetoj)) (lambda (p) (cdr p)))",
-                "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetoj)))) (= Atom (car p) 'syltetoj)) (lambda (p) (cdr p)))"
-            ),
-            (
-                "(the (-> (Pair Trivial Nat) (Pair Trivial Nat)) (lambda (x) x))",
-                "(the (-> (Pair Trivial Nat) (Pair Trivial Nat)) (lambda (x) (cons sole (cdr x))))"
-            ),
-            ("(the Trivial sole)", "(the Trivial sole)"),
-            (
-                "(the (Pi ((t1 Trivial) (t2 Trivial)) (= Trivial t1 t2)) (lambda (t1 t2) (same t1)))",
-                "(the (Pi ((t1 Trivial) (t2 Trivial)) (= Trivial t1 t2)) (lambda (t1 t2) (same sole)))"
-            ),
-            ("(the (= Nat 0 0) (same 0))", "(the (= Nat 0 0) (same 0))"),
-            (
-                "(the (Pi ((n Nat)) (-> (= Nat n 0) (= Nat 0 n))) (lambda (n eq) (symm eq)))",
-                "(the (Pi ((n Nat)) (-> (= Nat n 0) (= Nat 0 n))) (lambda (n eq) (symm eq)))"
-            ),
-            (
-                "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))",
-                "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))"
-            ),
-            (
-                "((the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n)))) 0 0 (same 0))",
-                "(the (= Nat 0 0) (same 0))"
-            ),
-            (
-                "(the (Pi ((i Nat) (j Nat) (k Nat)) (-> (= Nat i j) (= Nat j k) (= Nat i k))) (lambda (i j k a b) (trans a b)))",
-                "(the (Pi ((i Nat) (j Nat) (k Nat)) (-> (= Nat i j) (= Nat j k) (= Nat i k))) (lambda (i j k a b) (trans a b)))"
-            ),
-            (
-                "(trans (the (= Nat 2 2) (same 2)) (the (= Nat 2 2) (same 2)))",
-                "(the (= Nat 2 2) (same 2))"
-            ),
-            (
-                "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans eq1 (the (= Nat 0 0) (same 0)))))",
-                "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans eq1 (the (= Nat 0 0) (same 0)))))"
-            ),
-            (
-                "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))",
-                "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))"
-            ),
-            (
-                "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))",
-                "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))"
-            ),
-            ("(rec-List (the (List Atom) nil) 0 (lambda (_ _ l) (add1 l)))" , "(the Nat 0)"),
-            ("(rec-List (the (List Atom) (:: 'a (:: 'b nil))) 0 (lambda (_ _ l) (add1 l)))" , "(the Nat 2)"),
-            (
-                "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))",
-                "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))"
-            ),
-            (
-                "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))",
-                "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))"
-            ),
-            (
-                "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd x (= Nat 1 2))))",
-                "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd (the Absurd x) (= Nat 1 2))))"
-            ),
-            /* TODO: stack overflow
-            (
-                "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))",
-                "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))"
-            ),
-            (
-                "(the (Pi ((len Nat) (es (Vec Atom len))) (= (Vec Atom (add1 len)) (vec:: 'prickly-pear es) (vec:: 'prickly-pear es))) (lambda (len es) (ind-Vec len es (lambda (k xs) (= (Vec Atom (add1 k)) (vec:: 'prickly-pear xs) (vec:: 'prickly-pear xs))) (same (vec:: 'prickly-pear vecnil)) (lambda (k x xs so-far) (same (vec:: 'prickly-pear (vec:: x xs)))))))",
-                "(the (Pi ((len Nat) (es (Vec Atom len))) (= (Vec Atom (add1 len)) (vec:: 'prickly-pear es) (vec:: 'prickly-pear es))) (lambda (len es) (ind-Vec len es (lambda (k xs) (= (Vec Atom (add1 k)) (vec:: 'prickly-pear xs) (vec:: 'prickly-pear xs))) (same (vec:: 'prickly-pear vecnil)) (lambda (k x xs so-far) (same (vec:: 'prickly-pear (vec:: x xs)))))))"
-            ),
-            (
-                "(the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl))))))))",
-                "(the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl))))))))"
-            ),
-            (
-                "((the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl)))))))) Atom nil)",
-                "(the (= (List Atom) nil nil) (same nil))"
-            ),
-            (
-                "((the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl)))))))) Atom (:: 'kanelsnegl nil))",
-                "(the (= (List Atom) (:: 'kanelsnegl nil) (:: 'kanelsnegl nil)) (same (:: 'kanelsnegl nil)))"
-            ),
-            (
-                "(the U (Pair Nat (Sigma ((x Nat) (f (-> Absurd Trivial Nat))) (= Nat x 13))))",
-                "(the U (Pair Nat (Sigma ((x Nat) (f (-> Absurd Trivial Nat))) (= Nat x 13))))"
-            ),
-            (
-                "(the U (-> Atom Nat (Pi ((x Nat) (y (List Nat))) (= Nat x 13))))",
-                "(the U (-> Atom Nat (Pi ((x Nat) (y (List Nat))) (= Nat x 13))))"
-            ),
-            */
-        ];
-        for (input, normal) in cases {
-            let norm_expr = parse_expr(SOURCE, normal).unwrap();
-            let input_expr = parse_expr(SOURCE, input).unwrap();
-            let Synth::The(ty1, norm_core) = elab().synth(&norm_expr).unwrap();
-            let Synth::The(ty2, input_core) = elab().synth(&input_expr).unwrap();
-            elab().same_type(&ty1, &ty2).unwrap();
-            let v1 = norm().eval(&norm_core).unwrap();
-            let v2 = norm().eval(&input_core).unwrap();
-            elab().same(&ty1, &v1, &v2).unwrap()
-        }
+            );
+    }
+
+    #[test]
+    fn lambda_trivial_lambda() {
+        run(
+            "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (x) x))",
+            "(the (-> (-> Trivial Trivial) (-> Trivial Trivial)) (lambda (f) (lambda (x) sole)))",
+        );
+    }
+
+    #[test]
+    fn two_nat_lambda() {
+        run(
+            "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (x) x))",
+            "(the (-> (-> Nat Nat) (-> Nat Nat)) (lambda (f) (lambda (x) (f x))))",
+        );
+    }
+
+    #[test]
+    fn nat_lambda() {
+        run(
+            "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))",
+            "(the (-> (-> Nat Nat) Nat Nat) (lambda (f x) (f x)))",
+        );
+    }
+
+    #[test]
+    fn which_nat_zero() {
+        run("(which-Nat zero 't (lambda (x) 'nil))", "(the Atom 't)");
+    }
+
+    #[test]
+    fn which_nat_13() {
+        run("(which-Nat 13 't (lambda (x) 'nil))", "(the Atom 'nil)");
+    }
+
+    #[test]
+    fn which_nat_lambda() {
+        run(
+            "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))",
+            "(the (-> Nat Atom) (lambda (n) (which-Nat n 't (lambda (x) 'nil))))",
+        );
+    }
+
+    #[test]
+    fn iter_nat_zero_3() {
+        run("(iter-Nat zero 3 (lambda (x) (add1 x)))", "(the Nat 3)");
+    }
+
+    #[test]
+    fn iter_nat_2_3() {
+        run("(iter-Nat 2 3 (lambda (x) (add1 x)))", "(the Nat 5)");
+    }
+
+    #[test]
+    fn iter_nat_lambda() {
+        run(
+            "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))",
+            "(the (-> Nat Nat Nat) (lambda (j k) (iter-Nat j k (lambda (x) (add1 x)))))",
+        );
+    }
+
+    #[test]
+    fn rec_nat_zero() {
+        run(
+            "(rec-Nat zero (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
+            "(the (List Nat) nil)",
+        );
+    }
+
+    #[test]
+    fn rec_nat_3() {
+        run(
+            "(rec-Nat 3 (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))",
+            "(the (List Nat) (:: 2 (:: 1 (:: 0 nil))))",
+        );
+    }
+
+    #[test]
+    fn rec_nat_lambda() {
+        run(
+            "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))",
+            "(the (-> Nat (List Nat)) (lambda (n) (rec-Nat n (the (List Nat) nil) (lambda (n-1 almost) (:: n-1 almost)))))"
+        );
+    }
+
+    #[test]
+    fn ind_nat_zero() {
+        run(
+            "(ind-Nat zero (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
+            "(the (Vec Nat 0) vecnil)"
+        );
+    }
+
+    #[test]
+    fn ind_nat_2() {
+        run(
+            "(ind-Nat 2 (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))",
+            "(the (Vec Nat 2) (vec:: 1 (vec:: 0 vecnil)))",
+        );
+    }
+
+    #[test]
+    fn ind_nat_vec() {
+        run(
+            "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))",
+            "(the (Pi ((n Nat)) (Vec Nat n)) (lambda (j) (ind-Nat j (lambda (k) (Vec Nat k)) vecnil (lambda (n-1 almost) (vec:: n-1 almost)))))"
+        );
+    }
+
+    #[test]
+    fn eq_atom() {
+        run(
+            "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))",
+            "(the (-> (Sigma ((x Atom)) (= Atom x 'syltetoj)) Atom) (lambda (p) (car p)))",
+        );
+    }
+
+    #[test]
+    fn car() {
+        run("(car (the (Pair Nat Nat) (cons 2 3)))", "2");
+    }
+
+    #[test]
+    fn cdr() {
+        run("(cdr (the (Pair Nat Nat) (cons 2 3)))", "3");
+    }
+
+    #[test]
+    fn eq_cdr_atom() {
+        run(
+            "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetoj)))) (= Atom (car p) 'syltetoj)) (lambda (p) (cdr p)))",
+            "(the (Pi ((p (Sigma ((x Atom)) (= Atom x 'syltetoj)))) (= Atom (car p) 'syltetoj)) (lambda (p) (cdr p)))"
+        );
+    }
+
+    #[test]
+    fn cons_sole_cdr() {
+        run(
+            "(the (-> (Pair Trivial Nat) (Pair Trivial Nat)) (lambda (x) x))",
+            "(the (-> (Pair Trivial Nat) (Pair Trivial Nat)) (lambda (x) (cons sole (cdr x))))",
+        );
+    }
+
+    #[test]
+    fn trivial_sole_2() {
+        run("(the Trivial sole)", "(the Trivial sole)");
+    }
+
+    #[test]
+    fn eq_trivial_same() {
+        run(
+            "(the (Pi ((t1 Trivial) (t2 Trivial)) (= Trivial t1 t2)) (lambda (t1 t2) (same t1)))",
+            "(the (Pi ((t1 Trivial) (t2 Trivial)) (= Trivial t1 t2)) (lambda (t1 t2) (same sole)))",
+        );
+    }
+
+    #[test]
+    fn eq_same_nat() {
+        run("(the (= Nat 0 0) (same 0))", "(the (= Nat 0 0) (same 0))");
+    }
+
+    #[test]
+    fn eq_symm_nat() {
+        run(
+            "(the (Pi ((n Nat)) (-> (= Nat n 0) (= Nat 0 n))) (lambda (n eq) (symm eq)))",
+            "(the (Pi ((n Nat)) (-> (= Nat n 0) (= Nat 0 n))) (lambda (n eq) (symm eq)))",
+        );
+    }
+
+    #[test]
+    fn replace_same() {
+        run(
+            "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))",
+            "(the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n))))"
+        );
+    }
+
+    #[test]
+    fn replace_same_2() {
+        run(
+            "((the (Pi ((j Nat) (n Nat)) (-> (= Nat n j) (= Nat j n))) (lambda (j n eq) (replace eq (lambda (k) (= Nat k n)) (same n)))) 0 0 (same 0))",
+            "(the (= Nat 0 0) (same 0))"
+        );
+    }
+
+    #[test]
+    fn trans() {
+        run(
+            "(the (Pi ((i Nat) (j Nat) (k Nat)) (-> (= Nat i j) (= Nat j k) (= Nat i k))) (lambda (i j k a b) (trans a b)))",
+            "(the (Pi ((i Nat) (j Nat) (k Nat)) (-> (= Nat i j) (= Nat j k) (= Nat i k))) (lambda (i j k a b) (trans a b)))"
+        );
+    }
+
+    #[test]
+    fn trans_same() {
+        run(
+            "(trans (the (= Nat 2 2) (same 2)) (the (= Nat 2 2) (same 2)))",
+            "(the (= Nat 2 2) (same 2))",
+        );
+    }
+
+    #[test]
+    fn trans_eq1() {
+        run(
+            "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans eq1 (the (= Nat 0 0) (same 0)))))",
+            "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans eq1 (the (= Nat 0 0) (same 0)))))"
+        );
+    }
+
+    #[test]
+    fn trans_eq1_2() {
+        run(
+            "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))",
+            "(the (-> (= Nat 0 0) (= Nat 0 0)) (lambda (eq1) (trans (the (= Nat 0 0) (same 0)) eq1)))"
+        );
+    }
+
+    #[test]
+    fn cong_eq() {
+        run(
+            "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))",
+            "(the (Pi ((j Nat) (k Nat) (f (-> Nat Atom))) (-> (= Nat j k) (= Atom (f j) (f k)))) (lambda (j k f eq) (cong eq f)))"
+        );
+    }
+
+    #[test]
+    fn rec_list_nil() {
+        run(
+            "(rec-List (the (List Atom) nil) 0 (lambda (_ _ l) (add1 l)))",
+            "(the Nat 0)",
+        );
+    }
+
+    #[test]
+    fn rec_list_cons() {
+        run(
+            "(rec-List (the (List Atom) (:: 'a (:: 'b nil))) 0 (lambda (_ _ l) (add1 l)))",
+            "(the Nat 2)",
+        );
+    }
+
+    #[test]
+    fn rec_list_u() {
+        run(
+            "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))",
+            "(the (Pi ((E U)) (-> (List E) Nat)) (lambda (E es) (rec-List es 0 (lambda (_ _ l) (add1 l)))))"
+        );
+    }
+
+    #[test]
+    fn ind_either() {
+        run(
+            "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))",
+            "(the (Pi ((P U) (S U)) (-> (Either P S) (Either S P))) (lambda (P S x) (ind-Either x (lambda (ig) (Either S P)) (lambda (l) (right l)) (lambda (r) (left r)))))"
+        );
+    }
+
+    #[test]
+    fn ind_absurd() {
+        run(
+            "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd x (= Nat 1 2))))",
+            "(the (-> Absurd (= Nat 1 2)) (lambda (x) (ind-Absurd (the Absurd x) (= Nat 1 2))))",
+        );
+    }
+
+    #[test]
+    fn head_tail() {
+        run(
+            "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))",
+            "(the (Pi ((len Nat)) (-> (Vec Atom (add1 (add1 (add1 len)))) Atom)) (lambda (len es) (head (tail (tail es)))))"
+        );
+    }
+
+    #[test]
+    fn ind_vec() {
+        run(
+            "(the (Pi ((len Nat) (es (Vec Atom len))) (= (Vec Atom (add1 len)) (vec:: 'prickly-pear es) (vec:: 'prickly-pear es))) (lambda (len es) (ind-Vec len es (lambda (k xs) (= (Vec Atom (add1 k)) (vec:: 'prickly-pear xs) (vec:: 'prickly-pear xs))) (same (vec:: 'prickly-pear vecnil)) (lambda (k x xs so-far) (same (vec:: 'prickly-pear (vec:: x xs)))))))",
+            "(the (Pi ((len Nat) (es (Vec Atom len))) (= (Vec Atom (add1 len)) (vec:: 'prickly-pear es) (vec:: 'prickly-pear es))) (lambda (len es) (ind-Vec len es (lambda (k xs) (= (Vec Atom (add1 k)) (vec:: 'prickly-pear xs) (vec:: 'prickly-pear xs))) (same (vec:: 'prickly-pear vecnil)) (lambda (k x xs so-far) (same (vec:: 'prickly-pear (vec:: x xs)))))))"
+        );
+    }
+
+    #[test]
+    fn ind_list() {
+        run(
+            "(the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl))))))))",
+            "(the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl))))))))"
+        );
+    }
+
+    #[test]
+    fn ind_list_2() {
+        run(
+            "((the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl)))))))) Atom nil)",
+            "(the (= (List Atom) nil nil) (same nil))"
+        );
+    }
+
+    #[test]
+    fn ind_list_3() {
+        run(
+            "((the (Pi ((E U) (es (List E))) (= (List E) es (rec-List es (the (List E) nil) (lambda (x xs so-far) (:: x so-far))))) (lambda (E es) (ind-List es (lambda (xs) (= (List E) xs (rec-List xs (the (List E) nil) (lambda (y ys so-far) (:: y so-far))))) (same nil) (lambda (x xs so-far) (cong so-far (the (-> (List E) (List E)) (lambda (tl) (:: x tl)))))))) Atom (:: 'kanelsnegl nil))",
+            "(the (= (List Atom) (:: 'kanelsnegl nil) (:: 'kanelsnegl nil)) (same (:: 'kanelsnegl nil)))"
+        );
+    }
+
+    #[test]
+    fn absurd() {
+        run(
+            "(the U (Pair Nat (Sigma ((x Nat) (f (-> Absurd Trivial Nat))) (= Nat x 13))))",
+            "(the U (Pair Nat (Sigma ((x Nat) (f (-> Absurd Trivial Nat))) (= Nat x 13))))",
+        );
+    }
+
+    #[test]
+    fn list() {
+        run(
+            "(the U (-> Atom Nat (Pi ((x Nat) (y (List Nat))) (= Nat x 13))))",
+            "(the U (-> Atom Nat (Pi ((x Nat) (y (List Nat))) (= Nat x 13))))",
+        );
     }
 }
