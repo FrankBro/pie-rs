@@ -43,6 +43,7 @@ pub enum Error {
     SynthVecTailEmpty(Core),
     SynthVecTailNotVec(Core),
     SynthIndVecExpectedVec(Core),
+    SynthIndListNotList(Core),
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -521,8 +522,57 @@ impl Elab {
                     }
                 }
             }
-            ExprAt::IndList(_, _, _, _) => {
-                todo!()
+            ExprAt::IndList(tgt, mot, base, step) => {
+                let Synth::The(lst_t, tgt) = self.synth(tgt)?;
+                match lst_t {
+                    Value::List(elem) => {
+                        let mot_t = self.eval_in_env(
+                            Env::default().with("E", *elem.clone()),
+                            Core::pi("es", Core::List(Core::var("E").into()), Core::U),
+                        )?;
+                        let mot = self.check(&mot_t, mot)?;
+                        let mot_v = self.eval(&mot)?;
+                        let base_t = self.eval_in_env(
+                            Env::default().with("mot", mot_v.clone()),
+                            Core::App(Core::var("mot").into(), Core::ListNil.into()),
+                        )?;
+                        let base = self.check(&base_t, base)?;
+                        let step_t = self.eval_in_env(
+                            Env::default().with("E", *elem).with("mot", mot_v.clone()),
+                            Core::pi(
+                                "e",
+                                Core::var("E"),
+                                Core::pi(
+                                    "es",
+                                    Core::List(Core::var("E").into()),
+                                    Core::pi(
+                                        "so-far",
+                                        Core::App(Core::var("mot").into(), Core::var("es").into()),
+                                        Core::App(
+                                            Core::var("mot").into(),
+                                            Core::ListCons(
+                                                Core::var("e").into(),
+                                                Core::var("es").into(),
+                                            )
+                                            .into(),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        )?;
+                        let step = self.check(&step_t, step)?;
+                        let tgt_v = self.eval(&tgt)?;
+                        let ty = self.apply(mot_v, tgt_v)?;
+                        Ok(Synth::The(
+                            ty,
+                            Core::IndList(tgt.into(), mot.into(), base.into(), step.into()),
+                        ))
+                    }
+                    other => {
+                        let t = self.read_back_type(&other)?;
+                        Err(Error::SynthIndListNotList(t))
+                    }
+                }
             }
             ExprAt::VecHead(es) => {
                 let Synth::The(es_t, es) = self.synth(es)?;
@@ -792,12 +842,69 @@ impl Elab {
                 Ok(Synth::The(mot_v, Core::IndAbsurd(tgt.into(), mot.into())))
             }
             ExprAt::Atom => Ok(Synth::The(Value::U, Core::Atom)),
-            ExprAt::Sigma(_, _) => todo!(),
-            ExprAt::Pair(_, _) => todo!(),
-            ExprAt::Pi(_, _) => todo!(),
-            ExprAt::Arrow(_, _) => todo!(),
+            ExprAt::Sigma(arg_as, d) => {
+                let mut elab = self.clone();
+                let mut checked_as = Vec::new();
+                for (loc, x, a) in arg_as {
+                    let a = elab.check(&Value::U, a)?;
+                    let a_val = elab.eval(&a)?;
+                    let fresh_x = elab.fresh(x.clone());
+                    elab = elab.with_context(fresh_x.clone(), Some(loc.clone()), a_val, Ok)?;
+                    elab.rename(x.clone(), fresh_x);
+                    checked_as.push((x, a));
+                }
+                let mut acc = elab.check(&Value::U, d)?;
+                for (x, a) in checked_as.into_iter().rev() {
+                    acc = Core::Sigma(x.clone(), a.into(), acc.into());
+                }
+                Ok(Synth::The(Value::U, acc))
+            }
+            ExprAt::Pair(a, d) => {
+                let a = self.check(&Value::U, a)?;
+                let a_val = self.eval(&a)?;
+                let x = self.fresh("x".into());
+                let mut elab = self.with_context(x.clone(), None, a_val, Ok)?;
+                let d = elab.check(&Value::U, d)?;
+                Ok(Synth::The(Value::U, Core::Sigma(x, a.into(), d.into())))
+            }
+            ExprAt::Pi(args, ran) => {
+                let mut elab = self.clone();
+                let mut checked_args = Vec::new();
+                for (loc, x, dom) in args {
+                    let dom = elab.check(&Value::U, dom)?;
+                    let dom_val = elab.eval(&dom)?;
+                    let fresh_x = elab.fresh(x.clone());
+                    elab = elab.with_context(fresh_x.clone(), Some(loc.clone()), dom_val, Ok)?;
+                    elab.rename(x.clone(), fresh_x.clone());
+                    checked_args.push((fresh_x, dom));
+                }
+                let mut acc = elab.check(&Value::U, ran)?;
+                for (x, dom) in checked_args.into_iter().rev() {
+                    acc = Core::Pi(x.clone(), dom.into(), acc.into());
+                }
+                Ok(Synth::The(Value::U, acc))
+            }
+            ExprAt::Arrow(dom, ts) => {
+                let mut elab = self.clone();
+                let mut checked_ts = Vec::new();
+                for t in ts {
+                    let x = elab.fresh("x".into());
+                    let dom = elab.check(&Value::U, dom)?;
+                    let dom_val = elab.eval(&dom)?;
+                    elab = elab.with_context(x.clone(), None, dom_val, Ok)?;
+                    checked_ts.push((x, dom));
+                }
+                let mut acc = self.check(&Value::U, dom)?;
+                for (x, dom) in checked_ts.into_iter().rev() {
+                    acc = Core::Pi(x, dom.into(), acc.into());
+                }
+                Ok(Synth::The(Value::U, acc))
+            }
             ExprAt::Nat => Ok(Synth::The(Value::U, Core::Nat)),
-            ExprAt::List(_) => todo!(),
+            ExprAt::List(elem) => {
+                let elem = self.check(&Value::U, elem)?;
+                Ok(Synth::The(Value::U, Core::List(elem.into())))
+            }
             ExprAt::Vec(elem, len) => Ok(Synth::The(
                 Value::U,
                 Core::Vec(
@@ -821,7 +928,7 @@ impl Elab {
                 Ok(Synth::The(Value::U, Core::Either(l.into(), r.into())))
             }
             ExprAt::Trivial => Ok(Synth::The(Value::U, Core::Trivial)),
-            ExprAt::Absurd => todo!(),
+            ExprAt::Absurd => Ok(Synth::The(Value::U, Core::Absurd)),
             e => Err(Error::CantSynth(e.clone())),
         }
     }

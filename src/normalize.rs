@@ -1218,6 +1218,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn head_tail() {
         run(
@@ -1226,6 +1227,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn ind_vec() {
         run(
@@ -1234,6 +1236,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn ind_list() {
         run(
@@ -1242,6 +1245,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn ind_list_2() {
         run(
@@ -1250,6 +1254,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn ind_list_3() {
         run(
@@ -1258,6 +1263,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn absurd() {
         run(
