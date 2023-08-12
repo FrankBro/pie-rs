@@ -463,7 +463,62 @@ impl Norm {
     }
 
     fn ind_list(&self, tgt: Value, mot: Value, base: Value, step: Value) -> Result<Value> {
-        todo!()
+        match tgt.clone() {
+            Value::ListNil => Ok(base),
+            Value::ListCons(v, vs) => {
+                let so_far = self.ind_list(*vs.clone(), mot, base, step.clone())?;
+                self.apply_many(step, vec![*v, *vs, so_far])
+            }
+            Value::Neu(n, ne) => match *n {
+                Value::List(t) => {
+                    let mot_t =
+                        self.with_env(Env::default().with("E", *t.clone()))
+                            .eval(&Core::pi(
+                                "es",
+                                Core::List(Core::var("E").into()),
+                                Core::U.into(),
+                            ))?;
+                    let base_t = self
+                        .with_env(Env::default().with("mot", mot.clone()))
+                        .eval(&Core::App(Core::var("mot").into(), Core::ListNil.into()))?;
+                    let step_t = self
+                        .with_env(Env::default().with("E", *t).with("mot", mot.clone()))
+                        .eval(&Core::pi(
+                            "e",
+                            Core::var("E"),
+                            Core::pi(
+                                "es",
+                                Core::List(Core::var("E").into()),
+                                Core::pi(
+                                    "so-far",
+                                    Core::App(Core::var("mot").into(), Core::var("es").into()),
+                                    Core::App(
+                                        Core::var("mot").into(),
+                                        Core::ListCons(
+                                            Core::var("e").into(),
+                                            Core::var("es").into(),
+                                        )
+                                        .into(),
+                                    ),
+                                ),
+                            ),
+                        ))?;
+                    let ty = self.apply(mot.clone(), tgt)?;
+                    Ok(Value::Neu(
+                        ty.into(),
+                        Neutral::IndList(
+                            ne,
+                            Normal::The(mot_t, mot),
+                            Normal::The(base_t, base),
+                            Normal::The(step_t, step),
+                        )
+                        .into(),
+                    ))
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn replace(&self, tgt: Value, mot: Value, base: Value) -> Result<Value> {
