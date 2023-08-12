@@ -862,7 +862,7 @@ impl Elab {
             ExprAt::Pair(a, d) => {
                 let a = self.check(&Value::U, a)?;
                 let a_val = self.eval(&a)?;
-                let x = self.fresh("x".into());
+                let x = self.fresh("a".into());
                 let mut elab = self.with_context(x.clone(), None, a_val, Ok)?;
                 let d = elab.check(&Value::U, d)?;
                 Ok(Synth::The(Value::U, Core::Sigma(x, a.into(), d.into())))
