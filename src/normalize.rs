@@ -666,11 +666,31 @@ impl Norm {
     }
 
     fn head(&self, es: Value) -> Result<Value> {
-        todo!()
+        match es {
+            Value::VecCons(e, _) => Ok(*e),
+            Value::Neu(n, ne) => match *n {
+                Value::Vec(elem, _) => Ok(Value::Neu(elem, Neutral::Head(ne).into())),
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn tail(&self, es: Value) -> Result<Value> {
-        todo!()
+        match es {
+            Value::VecCons(_, es) => Ok(*es),
+            Value::Neu(n, ne) => match *n {
+                Value::Vec(elem, k) => match *k {
+                    Value::Add1(k) => Ok(Value::Neu(
+                        Value::Vec(elem, k).into(),
+                        Neutral::Tail(ne).into(),
+                    )),
+                    _ => unreachable!(),
+                },
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn ind_vec(&self, k: Value, es: Value, mot: Value, base: Value, step: Value) -> Result<Value> {
