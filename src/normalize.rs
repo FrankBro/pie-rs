@@ -623,7 +623,46 @@ impl Norm {
     }
 
     fn ind_eq(&self, tgt: Value, mot: Value, base: Value) -> Result<Value> {
-        todo!()
+        match tgt.clone() {
+            Value::Same(_) => Ok(Value::Same(base.into())),
+            Value::Neu(n, ne) => match *n {
+                Value::Eq(t, from, to) => {
+                    let mot_to = self.apply(mot.clone(), *to)?;
+                    let ty = self.apply(mot_to, tgt)?;
+                    let mot_from = self.apply(mot.clone(), *from.clone())?;
+                    let base_ty = self.apply(mot_from, Value::Same(from.clone()))?;
+                    let mot_ty = self.ind_eq_mot_ty(*t, *from)?;
+                    Ok(Value::Neu(
+                        ty.into(),
+                        Neutral::IndEq(ne, Normal::The(mot_ty, mot), Normal::The(base_ty, base))
+                            .into(),
+                    ))
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    fn ind_eq_mot_ty(&self, ty: Value, from: Value) -> Result<Value> {
+        let p = "p";
+        let t_n = "t";
+        let from_n = "from";
+        let to_n = "to";
+        self.with_env(Env::default().with(t_n, ty).with(from_n, from))
+            .eval(&Core::pi(
+                to_n,
+                Core::var(to_n),
+                Core::pi(
+                    p,
+                    Core::Eq(
+                        Core::var(t_n).into(),
+                        Core::var(from_n).into(),
+                        Core::var(to_n).into(),
+                    ),
+                    Core::U,
+                ),
+            ))
     }
 
     fn head(&self, es: Value) -> Result<Value> {
