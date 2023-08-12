@@ -1,5 +1,3 @@
-use normalize::Norm;
-
 use crate::{
     elab::Elab,
     parse::parse_expr,
