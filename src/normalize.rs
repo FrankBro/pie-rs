@@ -471,13 +471,9 @@ impl Norm {
             }
             Value::Neu(n, ne) => match *n {
                 Value::List(t) => {
-                    let mot_t =
-                        self.with_env(Env::default().with("E", *t.clone()))
-                            .eval(&Core::pi(
-                                "es",
-                                Core::List(Core::var("E").into()),
-                                Core::U.into(),
-                            ))?;
+                    let mot_t = self
+                        .with_env(Env::default().with("E", *t.clone()))
+                        .eval(&Core::pi("es", Core::List(Core::var("E").into()), Core::U))?;
                     let base_t = self
                         .with_env(Env::default().with("mot", mot.clone()))
                         .eval(&Core::App(Core::var("mot").into(), Core::ListNil.into()))?;
@@ -531,7 +527,7 @@ impl Norm {
                     Ok(Value::Neu(
                         ty.into(),
                         Neutral::Replace(
-                            ne.into(),
+                            ne,
                             Normal::The(Value::Pi("x".into(), a, Closure::new(Core::U)), mot),
                             Normal::The(base_t, base),
                         )
@@ -1073,7 +1069,7 @@ impl Norm {
             )),
             Neutral::Cong(
                 ne,
-                fun @ Normal::The(Value::Pi(_, a, Closure { env: e, expr: c }), _),
+                fun @ Normal::The(Value::Pi(_, _, Closure { env: e, expr: c }), _),
             ) => {
                 let b = self.with_env(e.clone()).eval(c)?;
                 Ok(Core::Cong(
@@ -1144,7 +1140,7 @@ mod tests {
     use crate::{
         elab::{Elab, Synth},
         parse::parse_expr,
-        types::{Closure, Core, Env, Loc, Pos, Value},
+        types::{Loc, Pos},
     };
 
     use super::Norm;

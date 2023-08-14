@@ -305,42 +305,42 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn as_pi(&self) -> Result<(&Symbol, &Box<Value>, &Closure<Value>), Value> {
+    pub fn as_pi(&self) -> Result<(&Symbol, &Value, &Closure<Value>), Value> {
         match self {
             Value::Pi(x, a, b) => Ok((x, a, b)),
             _ => Err(self.clone()),
         }
     }
 
-    pub fn as_sigma(&self) -> Result<(&Symbol, &Box<Value>, &Closure<Value>), Value> {
+    pub fn as_sigma(&self) -> Result<(&Symbol, &Value, &Closure<Value>), Value> {
         match self {
             Value::Sigma(x, a, b) => Ok((x, a, b)),
             _ => Err(self.clone()),
         }
     }
 
-    pub fn as_list(&self) -> Result<&Box<Value>, Value> {
+    pub fn as_list(&self) -> Result<&Value, Value> {
         match self {
             Value::List(e) => Ok(e),
             _ => Err(self.clone()),
         }
     }
 
-    pub fn as_vec(&self) -> Result<(&Box<Value>, &Box<Value>), Value> {
+    pub fn as_vec(&self) -> Result<(&Value, &Value), Value> {
         match self {
             Value::Vec(e, l) => Ok((e, l)),
             _ => Err(self.clone()),
         }
     }
 
-    pub fn as_eq(&self) -> Result<(&Box<Value>, &Box<Value>, &Box<Value>), Value> {
+    pub fn as_eq(&self) -> Result<(&Value, &Value, &Value), Value> {
         match self {
             Value::Eq(t, from, to) => Ok((t, from, to)),
             _ => Err(self.clone()),
         }
     }
 
-    pub fn as_either(&self) -> Result<(&Box<Value>, &Box<Value>), Value> {
+    pub fn as_either(&self) -> Result<(&Value, &Value), Value> {
         match self {
             Value::Either(a, b) => Ok((a, b)),
             _ => Err(self.clone()),

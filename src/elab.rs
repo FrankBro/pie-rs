@@ -957,11 +957,12 @@ impl Elab {
                 for (loc, x) in xs.iter() {
                     let (y, dom, ran) = t.as_pi().map_err(Error::CheckLambdaExpectedPi)?;
                     let z = elab.fresh(x.clone());
-                    elab = elab.with_context(z.clone(), Some(loc.clone()), *dom.clone(), Ok)?;
+                    elab =
+                        elab.with_context(z.clone(), Some(loc.clone()), dom.clone().into(), Ok)?;
                     let body_t = elab.instantiate(
                         ran.clone(),
                         y.clone(),
-                        Value::Neu(dom.clone(), Box::new(Neutral::Var(z.clone()))),
+                        Value::Neu(dom.clone().into(), Box::new(Neutral::Var(z.clone()))),
                     )?;
                     elab.rename(x.clone(), z.clone());
                     zs.push(z);
@@ -987,7 +988,7 @@ impl Elab {
             }
             ExprAt::VecNil => {
                 let (_, len) = t.as_vec().map_err(Error::CheckVecNilExpectedVec)?;
-                match *len.clone() {
+                match len.clone() {
                     Value::Zero => Ok(Core::VecNil),
                     other_len => {
                         let len = self.read_back(&Normal::The(Value::Nat, other_len))?;
@@ -997,10 +998,10 @@ impl Elab {
             }
             ExprAt::VecCons(e, es) => {
                 let (elem, len) = t.as_vec().map_err(Error::CheckVecConsExpectedVec)?;
-                match *len.clone() {
+                match len.clone() {
                     Value::Add1(k) => Ok(Core::VecCons(
                         self.check(elem, e)?.into(),
-                        self.check(&Value::Vec(elem.clone(), k), es)?.into(),
+                        self.check(&Value::Vec(elem.clone().into(), k), es)?.into(),
                     )),
                     other_len => {
                         let len = self.read_back(&Normal::The(Value::Nat, other_len))?;
