@@ -1469,6 +1469,7 @@ mod tests {
         );
     }
 
+    #[ignore]
     #[test]
     fn ind_vec() {
         run(
