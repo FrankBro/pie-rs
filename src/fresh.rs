@@ -18,9 +18,6 @@ fn freshen_split(used: &[Symbol], split: (&str, u64)) -> Symbol {
     }
 }
 
-const NAME_REGEX: &str = "^((?:[\\p{Letter}[0-9]]*[\\p{Letter}])?)([0-9₀₁₂₃₄₅₆₇₈₉]*)$";
-const NAME_DIGIT: &str = "0123456789₀₁₂₃₄₅₆₇₈₉";
-
 fn is_name_digit(c: &char) -> bool {
     "0123456789₀₁₂₃₄₅₆₇₈₉".contains(*c)
 }

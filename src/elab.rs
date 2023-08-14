@@ -578,7 +578,7 @@ impl Elab {
                 let Synth::The(es_t, es) = self.synth(es)?;
                 match es_t {
                     Value::Vec(elem_t, len) => match *len {
-                        Value::Add1(k) => Ok(Synth::The(*elem_t, Core::VecHead(es.into()))),
+                        Value::Add1(_) => Ok(Synth::The(*elem_t, Core::VecHead(es.into()))),
                         other => {
                             let len = self.read_back(&Normal::The(Value::Nat, other))?;
                             Err(Error::SynthVecHeadEmpty(len))
