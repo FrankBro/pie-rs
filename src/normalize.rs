@@ -693,8 +693,141 @@ impl Norm {
         }
     }
 
+    fn ind_vec_mot_ty(&self, elem: Value) -> Result<Value> {
+        self.with_env(Env::default().with("E", elem))
+            .eval(&Core::pi(
+                "len",
+                Core::Nat,
+                Core::pi(
+                    "es",
+                    Core::Vec(Core::var("E").into(), Core::var("len").into()),
+                    Core::U,
+                ),
+            ))
+    }
+
     fn ind_vec(&self, k: Value, es: Value, mot: Value, base: Value, step: Value) -> Result<Value> {
-        todo!()
+        match (k, es) {
+            (Value::Zero, Value::VecNil) => Ok(base),
+            (Value::Add1(k), Value::VecCons(v, vs)) => {
+                let so_far = self.ind_vec(*k.clone(), *vs.clone(), mot, base, step.clone())?;
+                self.apply_many(step, vec![*k, *v, *vs, so_far])
+            }
+            (Value::Neu(len_t, l), Value::Neu(es_t, ne)) => match (*len_t.clone(), *es_t.clone()) {
+                (Value::Nat, Value::Vec(elem, _)) => {
+                    let len = Value::Neu(len_t.clone(), l.clone());
+                    let es = Value::Neu(es_t.clone(), ne.clone());
+                    let ty = self.apply_many(mot.clone(), vec![len.clone(), es.clone()])?;
+                    let mot_t = self.ind_vec_mot_ty(*elem.clone())?;
+                    let base_t = self.apply_many(mot.clone(), vec![Value::Zero, Value::VecNil])?;
+                    let step_t = self
+                        .with_env(Env::default().with("E", *elem).with("mot", mot.clone()))
+                        .eval(&Core::pi(
+                            "k",
+                            Core::Nat,
+                            Core::pi(
+                                "e",
+                                Core::var("E"),
+                                Core::pi(
+                                    "es",
+                                    Core::Vec(Core::var("E").into(), Core::var("k").into()),
+                                    Core::pi(
+                                        "so-far",
+                                        Core::App(
+                                            Core::App(
+                                                Core::var("mot").into(),
+                                                Core::var("k").into(),
+                                            )
+                                            .into(),
+                                            Core::var("es").into(),
+                                        ),
+                                        Core::App(
+                                            Core::App(
+                                                Core::var("mot").into(),
+                                                Core::Add1(Core::var("k").into()).into(),
+                                            )
+                                            .into(),
+                                            Core::VecCons(
+                                                Core::var("e").into(),
+                                                Core::var("es").into(),
+                                            )
+                                            .into(),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ))?;
+                    Ok(Value::Neu(
+                        ty.into(),
+                        Neutral::IndVec12(
+                            l.clone(),
+                            ne,
+                            Normal::The(mot_t, mot),
+                            Normal::The(base_t, base),
+                            Normal::The(step_t, step),
+                        )
+                        .into(),
+                    ))
+                }
+                (_, Value::Vec(elem, _)) => {
+                    let len = Value::Neu(len_t.clone(), l.clone());
+                    let es = Value::Neu(es_t.clone(), ne.clone());
+                    let ty = self.apply_many(mot.clone(), vec![len.clone(), es])?;
+                    let mot_t = self.ind_vec_mot_ty(*elem.clone())?;
+                    let base_t = self.apply_many(mot.clone(), vec![Value::Zero, Value::VecNil])?;
+                    let step_t = self
+                        .with_env(Env::default().with("E", *elem).with("mot", mot.clone()))
+                        .eval(&Core::pi(
+                            "k",
+                            Core::Nat,
+                            Core::pi(
+                                "e",
+                                Core::var("E"),
+                                Core::pi(
+                                    "es",
+                                    Core::Vec(Core::var("E").into(), Core::var("k").into()),
+                                    Core::pi(
+                                        "so-far",
+                                        Core::App(
+                                            Core::App(
+                                                Core::var("mot").into(),
+                                                Core::var("k").into(),
+                                            )
+                                            .into(),
+                                            Core::var("es").into(),
+                                        ),
+                                        Core::App(
+                                            Core::App(
+                                                Core::var("mot").into(),
+                                                Core::Add1(Core::var("k").into()).into(),
+                                            )
+                                            .into(),
+                                            Core::VecCons(
+                                                Core::var("e").into(),
+                                                Core::var("es").into(),
+                                            )
+                                            .into(),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ))?;
+                    Ok(Value::Neu(
+                        ty.into(),
+                        Neutral::IndVec2(
+                            Normal::The(Value::Nat, len),
+                            ne,
+                            Normal::The(mot_t, mot),
+                            Normal::The(base_t, base),
+                            Normal::The(step_t, step),
+                        )
+                        .into(),
+                    ))
+                }
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
     }
 
     fn ind_either(&self, tgt: Value, mot: Value, left: Value, right: Value) -> Result<Value> {
